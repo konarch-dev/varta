@@ -1,0 +1,142 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: varta-prod-postgres
+    restart: always
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-varta_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB:-varta_db}
+    volumes:
+      - varta_prod_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-varta_user} -d ${POSTGRES_DB:-varta_db}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          memory: 1024M
+          cpus: "1.0"
+    networks:
+      - varta-prod-net
+
+  redis:
+    image: redis:7.2-alpine
+    container_name: varta-prod-redis
+    restart: always
+    command: ["redis-server", "--appendonly", "yes", "--requirepass", "${REDIS_PASSWORD:-}"]
+    volumes:
+      - varta_prod_redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: "0.5"
+    networks:
+      - varta-prod-net
+
+  api:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.api
+    container_name: varta-prod-api
+    restart: always
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    env_file:
+      - ../.env
+    environment:
+      NODE_ENV: production
+      PORT: 3001
+    ports:
+      - "127.0.0.1:3051:3001" # Bound only to localhost for Nginx reverse proxy
+    volumes:
+      - varta_prod_media:/app/uploads
+      - varta_prod_logs:/app/logs
+    deploy:
+      resources:
+        limits:
+          memory: 1024M
+          cpus: "1.0"
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:3001/api/v1/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+    networks:
+      - varta-prod-net
+
+  worker:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.worker
+    container_name: varta-prod-worker
+    restart: always
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    env_file:
+      - ../.env
+    environment:
+      NODE_ENV: production
+    volumes:
+      - varta_prod_media:/app/uploads
+      - varta_prod_logs:/app/logs
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: "0.5"
+    networks:
+      - varta-prod-net
+
+  web:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.web
+    container_name: varta-prod-web
+    restart: always
+    depends_on:
+      api:
+        condition: service_healthy
+    env_file:
+      - ../.env
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+    ports:
+      - "127.0.0.1:3050:3000" # Bound only to localhost for Nginx reverse proxy
+    deploy:
+      resources:
+        limits:
+          memory: 1024M
+          cpus: "1.0"
+    networks:
+      - varta-prod-net
+
+networks:
+  varta-prod-net:
+    name: varta-network
+    driver: bridge
+
+volumes:
+  varta_prod_pgdata:
+    name: varta_pgdata
+  varta_prod_redisdata:
+    name: varta_redisdata
+  varta_prod_media:
+    name: varta_media
+  varta_prod_logs:
+    name: varta_logs
