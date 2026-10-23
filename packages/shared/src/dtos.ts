@@ -48,7 +48,15 @@ export const UpdateProfileSchema = z.object({
   displayName: z.string().min(1).max(DISPLAY_NAME_MAX_LENGTH).optional(),
   bio: z.string().max(BIO_MAX_LENGTH).optional().nullable(),
   location: z.string().max(LOCATION_MAX_LENGTH).optional().nullable(),
-  website: z.string().url('Please enter a valid URL').max(WEBSITE_MAX_LENGTH).optional().nullable(),
+  website: z
+    .string()
+    .url('Please enter a valid URL')
+    .max(WEBSITE_MAX_LENGTH)
+    .optional()
+    .nullable()
+    .or(z.literal('')),
+  avatarUrl: z.string().optional().nullable(),
+  coverUrl: z.string().optional().nullable(),
 });
 
 export type UpdateProfileDto = z.infer<typeof UpdateProfileSchema>;
@@ -72,18 +80,20 @@ export const CreatePostSchema = z.object({
   mediaUrls: z
     .array(
       z.object({
-        url: z.string().url(),
-        thumbnailUrl: z.string().url().optional(),
+        url: z.string().min(1),
+        thumbnailUrl: z.string().optional().nullable(),
         type: z.enum(['IMAGE', 'VIDEO', 'GIF']),
         mimeType: z.string(),
         sizeBytes: z.number().int(),
-        width: z.number().int().optional(),
-        height: z.number().int().optional(),
+        width: z.number().int().optional().nullable(),
+        height: z.number().int().optional().nullable(),
       }),
     )
     .max(4)
     .optional(),
   poll: CreatePollSchema.optional(),
+  replySettings: z.string().optional(),
+  allowQuotePosts: z.boolean().optional(),
 }).refine(
   (data) =>
     data.content.trim().length > 0 ||

@@ -1,0 +1,65 @@
+# ==============================================================================
+# VARTA — Baat Sabki | Local Development Docker Compose
+# ==============================================================================
+# Provides PostgreSQL 16, Redis 7, and MailHog SMTP for local development.
+# Run with: docker compose up -d (or npm run docker:dev:up)
+# ==============================================================================
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: varta-dev-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: varta_user
+      POSTGRES_PASSWORD: varta_secure_password_123
+      POSTGRES_DB: varta_db
+    ports:
+      - "5433:5432"
+    volumes:
+      - varta_dev_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U varta_user -d varta_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - varta-dev-net
+
+  redis:
+    image: redis:7.2-alpine
+    container_name: varta-dev-redis
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    ports:
+      - "6379:6379"
+    volumes:
+      - varta_dev_redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - varta-dev-net
+
+  mailhog:
+    image: mailhog/mailhog:latest
+    container_name: varta-dev-mailhog
+    restart: unless-stopped
+    ports:
+      - "1025:1025" # SMTP port
+      - "8025:8025" # Web UI
+    networks:
+      - varta-dev-net
+
+networks:
+  varta-dev-net:
+    name: varta-dev-network
+    driver: bridge
+
+volumes:
+  varta_dev_pgdata:
+    name: varta_dev_pgdata
+  varta_dev_redisdata:
+    name: varta_dev_redisdata

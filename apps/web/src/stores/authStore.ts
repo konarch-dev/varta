@@ -8,7 +8,7 @@ interface AuthState {
   isLoading: boolean;
   isInitialized: boolean;
   login: (dto: LoginDto) => Promise<void>;
-  register: (dto: RegisterDto) => Promise<void>;
+  register: (dto: RegisterDto) => Promise<any>;
   logout: () => Promise<void>;
   initAuth: () => Promise<void>;
   updateUser: (updatedUser: Partial<CurrentUser>) => void;
@@ -57,13 +57,25 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   register: async (dto: RegisterDto) => {
     set({ isLoading: true });
     try {
-      const data = await apiRequest<{ user: CurrentUser; accessToken: string }>('/auth/register', {
+      const data = await apiRequest<{
+        requiresVerification?: boolean;
+        message?: string;
+        email?: string;
+        user?: CurrentUser;
+        accessToken?: string;
+      }>('/auth/register', {
         method: 'POST',
         body: JSON.stringify(dto),
       });
 
-      setApiToken(data.accessToken);
-      set({ user: data.user, token: data.accessToken, isLoading: false });
+      if (data.accessToken && data.user) {
+        setApiToken(data.accessToken);
+        set({ user: data.user, token: data.accessToken, isLoading: false });
+      } else {
+        set({ isLoading: false });
+      }
+
+      return data;
     } catch (err) {
       set({ isLoading: false });
       throw err;

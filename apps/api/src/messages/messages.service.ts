@@ -6,10 +6,14 @@ import {
 } from '@nestjs/common';
 import { PrismaService } from '../database/prisma.service';
 import { SendMessageDto } from '@varta/shared';
+import { EventsGateway } from '../websocket/events.gateway';
 
 @Injectable()
 export class MessagesService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly eventsGateway: EventsGateway,
+  ) {}
 
   async getConversations(userId: string) {
     const memberRecords = await this.prisma.conversationMember.findMany({
@@ -33,19 +37,60 @@ export class MessagesService {
       orderBy: { conversation: { updatedAt: 'desc' } },
     });
 
+    const convIds = memberRecords.map((m) => m.conversationId);
+    const unreadCounts = await this.prisma.message.groupBy({
+      by: ['conversationId'],
+      where: {
+        conversationId: { in: convIds },
+        senderId: { not: userId },
+        isRead: false,
+      },
+      _count: { _all: true },
+    });
+    const unreadMap = new Map(unreadCounts.map((u) => [u.conversationId, u._count._all]));
+
     return memberRecords.map((m) => {
-      const otherMember = m.conversation.members[0]?.user;
-      const lastMessage = m.conversation.messages[0] || null;
+      const conv = m.conversation;
+      const otherMembers = conv.members.map((mem) => mem.user);
+      const isGroup = conv.isGroup || otherMembers.length > 1;
+      const singleOther = otherMembers[0] || null;
+      const lastMessage = conv.messages[0] || null;
+
+      const groupTitle =
+        conv.title ||
+        (isGroup
+          ? otherMembers.map((u) => u.profile?.displayName || u.username).join(', ')
+          : singleOther?.profile?.displayName || singleOther?.username || 'Chat');
 
       return {
         id: m.conversationId,
-        otherMember: otherMember
+        isGroup,
+        title: groupTitle,
+        avatarUrl: conv.avatarUrl || null,
+        members: otherMembers.map((u) => ({
+          id: u.id,
+          username: u.username,
+          displayName: u.profile?.displayName || u.username,
+          avatarUrl: u.profile?.avatarUrl || null,
+          isVerified: u.isVerified,
+          isPrivate: u.isPrivate,
+        })),
+        otherMember: !isGroup && singleOther
           ? {
-              id: otherMember.id,
-              username: otherMember.username,
-              displayName: otherMember.profile?.displayName || otherMember.username,
-              avatarUrl: otherMember.profile?.avatarUrl,
-              isVerified: otherMember.isVerified,
+              id: singleOther.id,
+              username: singleOther.username,
+              displayName: singleOther.profile?.displayName || singleOther.username,
+              avatarUrl: singleOther.profile?.avatarUrl,
+              isVerified: singleOther.isVerified,
+            }
+          : isGroup
+          ? {
+              id: conv.id,
+              username: 'group',
+              displayName: groupTitle,
+              avatarUrl: conv.avatarUrl || null,
+              isVerified: false,
+              isPrivate: false,
             }
           : null,
         lastMessage: lastMessage
@@ -57,10 +102,87 @@ export class MessagesService {
               isRead: lastMessage.isRead,
             }
           : null,
-        unreadCount: 0,
-        updatedAt: m.conversation.updatedAt.toISOString(),
+        unreadCount: unreadMap.get(m.conversationId) || 0,
+        updatedAt: conv.updatedAt.toISOString(),
       };
     });
+  }
+
+  async createGroupConversation(creatorId: string, title: string, usernames: string[]) {
+    if (!usernames || usernames.length === 0) {
+      throw new BadRequestException('At least one other member is required to create a group');
+    }
+
+    const cleanUsernames = Array.from(new Set(usernames.map((u) => u.trim().toLowerCase())));
+    const targetUsers = await this.prisma.user.findMany({
+      where: { username: { in: cleanUsernames } },
+      select: { id: true, username: true, profile: { select: { displayName: true } } },
+    });
+
+    if (targetUsers.length === 0) {
+      throw new BadRequestException('No valid users found to add to group');
+    }
+
+    const otherMemberIds = targetUsers.filter((u) => u.id !== creatorId).map((u) => u.id);
+    if (otherMemberIds.length === 0) {
+      throw new BadRequestException('Cannot create a group with only yourself');
+    }
+
+    const allMemberIds = [creatorId, ...otherMemberIds];
+    const groupTitle =
+      title?.trim() ||
+      targetUsers.map((u) => u.profile?.displayName || u.username).slice(0, 3).join(', ') + ' Group';
+
+    const conversation = await this.prisma.conversation.create({
+      data: {
+        title: groupTitle,
+        isGroup: true,
+        members: {
+          create: allMemberIds.map((userId) => ({ userId })),
+        },
+      },
+    });
+
+    // Create system / welcome message
+    await this.prisma.message.create({
+      data: {
+        conversationId: conversation.id,
+        senderId: creatorId,
+        content: `🎉 Welcome to ${groupTitle}! The group chat has been created.`,
+      },
+    });
+
+    // Notify all members via WebSocket
+    for (const memberId of otherMemberIds) {
+      this.eventsGateway.server?.to(`user:${memberId}`).emit('conversation:new_group', {
+        conversationId: conversation.id,
+        title: groupTitle,
+      });
+      this.eventsGateway.sendNotificationToUser(memberId, {
+        type: 'DIRECT_MESSAGE',
+        actorId: creatorId,
+        entityId: conversation.id,
+        message: `added you to group "${groupTitle}"`,
+      });
+    }
+
+    return { conversationId: conversation.id, title: groupTitle };
+  }
+
+  async getUnreadCount(userId: string): Promise<{ count: number }> {
+    const count = await this.prisma.message.count({
+      where: {
+        conversation: {
+          members: {
+            some: { userId },
+          },
+        },
+        senderId: { not: userId },
+        isRead: false,
+      },
+    });
+
+    return { count };
   }
 
   async getOrCreateConversation(userId: string, targetUsername: string) {
@@ -202,7 +324,7 @@ export class MessagesService {
       });
     }
 
-    return {
+    const result = {
       id: message.id,
       conversationId: message.conversationId,
       senderId: message.senderId,
@@ -218,6 +340,31 @@ export class MessagesService {
       isRead: message.isRead,
       createdAt: message.createdAt.toISOString(),
     };
+
+    // Emit live real-time message to conversation room
+    this.eventsGateway.sendMessageToConversation(conversationId, result);
+
+    // Emit live conversation update and updated unread count to other members
+    for (const om of otherMembers) {
+      const unreadCount = await this.prisma.message.count({
+        where: {
+          conversation: { members: { some: { userId: om.userId } } },
+          senderId: { not: om.userId },
+          isRead: false,
+        },
+      });
+
+      this.eventsGateway.server?.to(`user:${om.userId}`).emit('messages:unread_count', {
+        count: unreadCount,
+      });
+
+      this.eventsGateway.server?.to(`user:${om.userId}`).emit('conversation:update', {
+        conversationId,
+        lastMessage: result,
+      });
+    }
+
+    return result;
   }
 
   async markAsRead(conversationId: string, userId: string) {
@@ -235,6 +382,23 @@ export class MessagesService {
         conversationId_userId: { conversationId, userId },
       },
       data: { lastReadAt: new Date() },
+    });
+
+    this.eventsGateway.server?.to(`conversation:${conversationId}`).emit('conversation:read', {
+      conversationId,
+      userId,
+    });
+
+    const remainingUnread = await this.prisma.message.count({
+      where: {
+        conversation: { members: { some: { userId } } },
+        senderId: { not: userId },
+        isRead: false,
+      },
+    });
+
+    this.eventsGateway.server?.to(`user:${userId}`).emit('messages:unread_count', {
+      count: remainingUnread,
     });
 
     return { success: true };

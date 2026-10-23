@@ -111,6 +111,8 @@ model User {
   moderationActions      ModerationAction[]    @relation("ModeratedUserRelation")
   adminActionsTaken      ModerationAction[]    @relation("ModeratorRelation")
   auditLogs              AuditLog[]
+  groupsCreated          Group[]               @relation("GroupCreator")
+  groupMemberships       GroupMember[]
 
   @@index([username])
   @@index([email])
@@ -153,6 +155,10 @@ model Post {
   author       User      @relation(fields: [authorId], references: [id], onDelete: Cascade)
   content      String    @db.VarChar(500)
   
+  // Group / Community relation
+  groupId      String?
+  group        Group?    @relation(fields: [groupId], references: [id], onDelete: SetNull)
+
   // Threading / Replies
   parentId     String?
   parent       Post?     @relation("PostReplies", fields: [parentId], references: [id], onDelete: SetNull)
@@ -193,6 +199,7 @@ model Post {
   @@index([createdAt(sort: Desc), id])
   @@index([parentId])
   @@index([repostOfId])
+  @@index([groupId])
 }
 
 model PostMedia {
@@ -406,6 +413,9 @@ model NotificationPreference {
 
 model Conversation {
   id        String               @id @default(uuid())
+  title     String?              @db.VarChar(100)
+  isGroup   Boolean              @default(false)
+  avatarUrl String?
   createdAt DateTime             @default(now())
   updatedAt DateTime             @updatedAt
   members   ConversationMember[]
@@ -490,3 +500,42 @@ model AuditLog {
   @@index([entity, entityId])
   @@index([createdAt(sort: Desc)])
 }
+
+model Group {
+  id          String        @id @default(uuid())
+  name        String        @db.VarChar(100)
+  slug        String        @unique @db.VarChar(120)
+  description String?       @db.VarChar(500)
+  category    String        @db.VarChar(50) // "India Trends", "Technology", "Travel", "Sports", "Entertainment"
+  avatarUrl   String?
+  coverUrl    String?
+  creatorId   String
+  creator     User          @relation("GroupCreator", fields: [creatorId], references: [id], onDelete: Cascade)
+  memberCount Int           @default(0)
+  postCount   Int           @default(0)
+  isPrivate   Boolean       @default(false)
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  members     GroupMember[]
+  posts       Post[]
+
+  @@index([category])
+  @@index([creatorId])
+  @@index([memberCount(sort: Desc)])
+}
+
+model GroupMember {
+  id        String   @id @default(uuid())
+  groupId   String
+  group     Group    @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role      String   @default("MEMBER") // "ADMIN", "MODERATOR", "MEMBER"
+  createdAt DateTime @default(now())
+
+  @@unique([groupId, userId])
+  @@index([userId])
+  @@index([groupId])
+}
+

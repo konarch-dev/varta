@@ -1,7 +1,8 @@
-import { Controller, Get, Query, Param, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Query, Param, UseGuards } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiQuery } from '@nestjs/swagger';
 import { ExploreService } from './explore.service';
 import { OptionalJwtAuthGuard } from '../auth/guards/optional-jwt-auth.guard';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 
 @ApiTags('Explore & Search')
@@ -61,5 +62,60 @@ export class ExploreController {
     @Query('limit') limit?: number,
   ) {
     return this.exploreService.getWhoToFollow(user?.id, limit ? Number(limit) : 5);
+  }
+
+  @Get('communities')
+  @UseGuards(OptionalJwtAuthGuard)
+  @ApiOperation({ summary: 'Get groups/communities with category filter and search' })
+  @ApiQuery({ name: 'category', required: false })
+  @ApiQuery({ name: 'search', required: false })
+  @ApiQuery({ name: 'joined', required: false })
+  @ApiQuery({ name: 'limit', required: false })
+  @ApiQuery({ name: 'cursor', required: false })
+  async getCommunities(
+    @Query('category') category?: string,
+    @Query('search') search?: string,
+    @Query('joined') joined?: string,
+    @Query('limit') limit?: number,
+    @Query('cursor') cursor?: string,
+    @CurrentUser() user?: any,
+  ) {
+    return this.exploreService.getCommunities(
+      category,
+      search,
+      joined === 'true',
+      user?.id,
+      limit ? Number(limit) : 50,
+      cursor,
+    );
+  }
+
+  @Post('communities/:id/join')
+  @UseGuards(JwtAuthGuard)
+  @ApiOperation({ summary: 'Toggle join/leave community' })
+  async toggleJoinCommunity(
+    @Param('id') id: string,
+    @CurrentUser() user: any,
+  ) {
+    return this.exploreService.toggleJoinCommunity(id, user.id);
+  }
+
+  @Get('communities/:id/posts')
+  @UseGuards(OptionalJwtAuthGuard)
+  @ApiOperation({ summary: 'Get community posts with media and videos' })
+  @ApiQuery({ name: 'limit', required: false })
+  @ApiQuery({ name: 'cursor', required: false })
+  async getCommunityPosts(
+    @Param('id') id: string,
+    @Query('limit') limit?: number,
+    @Query('cursor') cursor?: string,
+    @CurrentUser() user?: any,
+  ) {
+    return this.exploreService.getCommunityPosts(
+      id,
+      limit ? Number(limit) : 20,
+      cursor,
+      user?.id,
+    );
   }
 }

@@ -3,6 +3,7 @@ import {
   Post,
   Body,
   Get,
+  Query,
   Req,
   Res,
   UseGuards,
@@ -15,6 +16,8 @@ import { Request, Response } from 'express';
 import { AuthService } from './auth.service';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
+import { ForgotPasswordDto } from './dto/forgot-password.dto';
+import { ResetPasswordDto } from './dto/reset-password.dto';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { CurrentUser } from './decorators/current-user.decorator';
 
@@ -44,18 +47,47 @@ export class AuthController {
 
   @Post('register')
   @ApiOperation({ summary: 'Register a new user account' })
-  @ApiResponse({ status: 201, description: 'User successfully registered' })
+  @ApiResponse({ status: 201, description: 'User registered, confirmation email dispatched' })
   async register(
     @Body() dto: RegisterDto,
     @Res({ passthrough: true }) res: Response,
   ) {
     const result = await this.authService.register(dto);
-    this.setRefreshTokenCookie(res, result.refreshToken);
-    return {
-      user: result.user,
-      accessToken: result.accessToken,
-      expiresIn: result.expiresIn,
-    };
+    if ('refreshToken' in result && result.refreshToken) {
+      this.setRefreshTokenCookie(res, (result as any).refreshToken);
+    }
+    return result;
+  }
+
+  @Get('verify-email')
+  @ApiOperation({ summary: 'Confirm and activate user account via email token' })
+  @ApiResponse({ status: 200, description: 'Account successfully activated' })
+  async verifyEmail(@Query('token') token: string) {
+    return this.authService.verifyEmail(token);
+  }
+
+  @Post('resend-verification')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Resend email verification activation link' })
+  @ApiResponse({ status: 200, description: 'Confirmation email resent' })
+  async resendVerification(@Body('email') email: string) {
+    return this.authService.resendVerification(email);
+  }
+
+  @Post('forgot-password')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Request password reset link via email' })
+  @ApiResponse({ status: 200, description: 'Reset email dispatched if account exists' })
+  async forgotPassword(@Body() dto: ForgotPasswordDto) {
+    return this.authService.forgotPassword(dto);
+  }
+
+  @Post('reset-password')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Reset password using token from email' })
+  @ApiResponse({ status: 200, description: 'Password reset successfully' })
+  async resetPassword(@Body() dto: ResetPasswordDto) {
+    return this.authService.resetPassword(dto);
   }
 
   @Post('login')

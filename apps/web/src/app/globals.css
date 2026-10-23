@@ -3,72 +3,79 @@
 @tailwind utilities;
 
 :root {
-  /* Default to Dark Theme as primary experience */
-  --background: #090B10;
-  --foreground: #F8FAFC;
-  --surface: #11151D;
-  --surface-elevated: #191F2B;
+  /* VARTA Dark Premium Theme (Default) */
+  --background: #050B14;
+  --background-secondary: #0B1422;
+  --surface: #0B1422;
+  --surface-elevated: #101D2D;
   
-  --card: #11151D;
+  --card: #0C1726;
   --card-foreground: #F8FAFC;
   
-  --popover: #191F2B;
+  --popover: #101D2D;
   --popover-foreground: #F8FAFC;
   
-  --primary: #3B82F6;
-  --primary-hover: #2563EB;
+  /* Saffron Orange Brand Accent */
+  --primary: #FF9933;
+  --primary-hover: #E68525;
   --primary-foreground: #FFFFFF;
   
-  --secondary: #8B5CF6;
-  --secondary-hover: #7C3AED;
+  /* Green Brand Accent */
+  --secondary: #00C853;
+  --secondary-hover: #00A844;
   --secondary-foreground: #FFFFFF;
   
-  --muted: #191F2B;
+  --foreground: #F8FAFC;
+  --muted: #0B1422;
   --muted-foreground: #94A3B8;
   
-  --accent: #191F2B;
+  --accent: #101D2D;
   --accent-foreground: #F8FAFC;
-  --accent-success: #10B981;
+  --accent-success: #00C853;
   --accent-danger: #EF4444;
   
-  --border: #252D3A;
-  --input: #191F2B;
-  --ring: #3B82F6;
+  --border: #1E293B;
+  --input: #0B1422;
+  --ring: #FF9933;
+  --link: #38BDF8;
   
   --radius: 0.75rem;
 }
 
 .light {
-  --background: #F8FAFC;
-  --foreground: #090B10;
+  /* VARTA Light Theme */
+  --background: #FFFFFF;
+  --background-secondary: #F8FAFC;
   --surface: #FFFFFF;
   --surface-elevated: #F1F5F9;
   
   --card: #FFFFFF;
-  --card-foreground: #090B10;
+  --card-foreground: #050B14;
   
   --popover: #FFFFFF;
-  --popover-foreground: #090B10;
+  --popover-foreground: #050B14;
   
-  --primary: #2563EB;
-  --primary-hover: #1D4ED8;
+  --primary: #FF9933;
+  --primary-hover: #E68525;
   --primary-foreground: #FFFFFF;
   
-  --secondary: #7C3AED;
-  --secondary-hover: #6D28D9;
+  --secondary: #00C853;
+  --secondary-hover: #00A844;
   --secondary-foreground: #FFFFFF;
   
-  --muted: #F1F5F9;
+  --foreground: #050B14;
+  --muted: #F8FAFC;
   --muted-foreground: #64748B;
   
   --accent: #F1F5F9;
-  --accent-foreground: #090B10;
-  --accent-success: #059669;
-  --accent-danger: #DC2626;
+  --accent-foreground: #050B14;
+  --accent-success: #00C853;
+  --accent-danger: #EF4444;
   
   --border: #E2E8F0;
-  --input: #E2E8F0;
-  --ring: #2563EB;
+  --input: #F8FAFC;
+  --ring: #FF9933;
+  --link: #0284C7;
 }
 
 * {
@@ -82,6 +89,232 @@ body {
   overflow-x: hidden;
 }
 
+/* ========================================================
+   VARTA LIGHT THEME (Inspired by Bluesky & X / Twitter)
+   ======================================================== */
+html.light body {
+  background-color: #FFFFFF !important;
+  color: #0F172A !important;
+}
+
+/* 1. Backgrounds & Surfaces */
+html.light .bg-\[\#050B14\],
+html.light [class*="bg-[#050B14]/"],
+html.light .bg-\[\#070D18\],
+html.light [class*="bg-[#070D18]/"],
+html.light .bg-\[\#090B10\],
+html.light [class*="bg-[#090B10]/"],
+html.light .bg-\[\#0C1726\],
+html.light [class*="bg-[#0C1726]/"],
+html.light .bg-\[\#0E1726\],
+html.light [class*="bg-[#0E1726]/"],
+html.light .bg-\[\#0E1A2B\],
+html.light [class*="bg-[#0E1A2B]/"] {
+  background-color: #FFFFFF !important;
+}
+
+html.light .bg-\[\#050B14\]\/90,
+html.light .bg-\[\#050B14\]\/95 {
+  background-color: rgba(255, 255, 255, 0.95) !important;
+}
+
+html.light .bg-\[\#0B1422\],
+html.light [class*="bg-[#0B1422]/"],
+html.light .bg-\[\#101D2D\],
+html.light [class*="bg-[#101D2D]/"],
+html.light .bg-\[\#191F2B\],
+html.light [class*="bg-[#191F2B]/"] {
+  background-color: #F8FAFC !important;
+}
+
+html.light .bg-\[\#050B14\]\/80 {
+  background-color: #FFFFFF !important;
+}
+
+/* 2. Text Hierarchy (Fixes white invisible text on light cards) */
+html.light .text-slate-100,
+html.light .text-slate-50 {
+  color: #0F172A !important;
+}
+
+html.light .text-slate-200,
+html.light .text-slate-300 {
+  color: #334155 !important;
+}
+
+html.light .text-slate-400 {
+  color: #64748B !important;
+}
+
+html.light .text-slate-500 {
+  color: #64748B !important;
+}
+
+html.light .text-white {
+  color: #0F172A !important;
+}
+
+/* 1. Preserve crisp white text on ALL solid action buttons, links & dark pills/overlays */
+html.light button.bg-\[\#FF9933\],
+html.light button.bg-\[\#FF9933\] *,
+html.light a.bg-\[\#FF9933\],
+html.light a.bg-\[\#FF9933\] *,
+html.light .bg-\[\#FF9933\],
+html.light .bg-\[\#FF9933\] *,
+html.light .bg-\[\#E68525\],
+html.light .bg-\[\#E68525\] *,
+html.light button.bg-\[\#00C853\],
+html.light button.bg-\[\#00C853\] *,
+html.light a.bg-\[\#00C853\],
+html.light a.bg-\[\#00C853\] *,
+html.light .bg-\[\#00C853\],
+html.light .bg-\[\#00C853\] *,
+html.light button.bg-\[\#00A844\],
+html.light button.bg-\[\#00A844\] *,
+html.light .bg-\[\#0F172A\],
+html.light .bg-\[\#0F172A\] *,
+html.light button.bg-\[\#0F172A\],
+html.light button.bg-\[\#0F172A\] *,
+html.light [class*="bg-black/"],
+html.light [class*="bg-black/"] *,
+html.light [class*="bg-black"],
+html.light [class*="bg-black"] *,
+html.light .bg-black,
+html.light .bg-black * {
+  color: #FFFFFF !important;
+}
+
+/* 2. Explicit high-contrast text for tinted badges in light mode (fixes white text on peach/mint) */
+html.light [class*="bg-[#FF9933]/"],
+html.light [class*="bg-[#FF9933]/"] *,
+html.light [class*="bg-orange-100"],
+html.light [class*="bg-orange-100"] *,
+html.light [class*="bg-amber-100"],
+html.light [class*="bg-amber-100"] * {
+  color: #9A3412 !important;
+}
+
+html.light [class*="bg-[#00C853]/"],
+html.light [class*="bg-[#00C853]/"] *,
+html.light [class*="bg-emerald-100"],
+html.light [class*="bg-emerald-100"] *,
+html.light [class*="bg-green-100"],
+html.light [class*="bg-green-100"] * {
+  color: #065F46 !important;
+}
+
+html.light [class*="bg-[#38BDF8]/"],
+html.light [class*="bg-[#38BDF8]/"] *,
+html.light [class*="bg-sky-100"],
+html.light [class*="bg-sky-100"] * {
+  color: #0369A1 !important;
+}
+
+/* 3. Re-assert solid buttons ALWAYS retain white text over tinted rules */
+html.light button.bg-\[\#FF9933\],
+html.light button.bg-\[\#FF9933\] *,
+html.light a.bg-\[\#FF9933\],
+html.light a.bg-\[\#FF9933\] *,
+html.light button.bg-\[\#00C853\],
+html.light button.bg-\[\#00C853\] *,
+html.light a.bg-\[\#00C853\],
+html.light a.bg-\[\#00C853\] * {
+  color: #FFFFFF !important;
+}
+
+
+/* 3. Hover States (Fixes black/dark hover color - Bluesky / X soft daylight hover) */
+html.light .hover\:bg-\[\#0B1422\]:hover,
+html.light .hover\:bg-\[\#101D2D\]:hover,
+html.light .hover\:bg-\[\#101D2D\]\/60:hover,
+html.light .hover\:bg-\[\#0B1422\]\/70:hover,
+html.light .hover\:bg-\[\#1A2C42\]:hover,
+html.light .hover\:bg-slate-800:hover,
+html.light .hover\:bg-slate-700:hover,
+html.light .hover\:bg-\[\#050B14\]:hover,
+html.light [class*="hover:bg-[#0B1422]"]:hover,
+html.light [class*="hover:bg-[#101D2D]"]:hover,
+html.light [class*="hover:bg-[#1A2C42]"]:hover,
+html.light .group:hover .group-hover\:bg-\[\#101D2D\] {
+  background-color: #F1F5F9 !important;
+}
+
+/* Feed Post articles in light mode */
+html.light article {
+  background-color: #FFFFFF !important;
+}
+
+html.light article:hover {
+  background-color: #F8FAFC !important;
+}
+
+html.light .hover\:text-white:hover {
+  color: #0F172A !important;
+}
+
+html.light .group:hover .group-hover\:text-white {
+  color: #0F172A !important;
+}
+
+html.light .group:hover .group-hover\:text-slate-200 {
+  color: #0F172A !important;
+}
+
+html.light .group:hover .group-hover\:text-\[\#FF9933\] {
+  color: #FF9933 !important;
+}
+
+/* Gradient overrides in light mode */
+html.light .from-\[\#0B1422\],
+html.light .from-\[\#101D2D\],
+html.light .from-\[\#0E1A2B\] {
+  --tw-gradient-from: #FFFBEB !important;
+  --tw-gradient-to: rgba(255, 251, 235, 0) !important;
+  --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to) !important;
+}
+
+html.light .to-\[\#0B1422\],
+html.light .to-\[\#101D2D\],
+html.light .to-\[\#1E293B\] {
+  --tw-gradient-to: #FFFFFF !important;
+}
+
+html.light .via-\[\#0E1A2B\],
+html.light .via-\[\#101D2D\] {
+  --tw-gradient-stops: var(--tw-gradient-from), #FFF7ED, var(--tw-gradient-to) !important;
+}
+
+/* 4. Borders & Dividers */
+html.light .border-\[\#1E293B\],
+html.light .border-\[\#1E293B\]\/60,
+html.light .border-\[\#1E293B\]\/80,
+html.light .ring-\[\#1E293B\] {
+  border-color: #E2E8F0 !important;
+  --tw-ring-color: #E2E8F0 !important;
+}
+
+html.light .divide-\[\#1E293B\]\/60 > * + * {
+  border-color: #E2E8F0 !important;
+}
+
+/* 5. Inputs & Dropdowns */
+html.light input:not([type="checkbox"]):not([type="radio"]),
+html.light select,
+html.light textarea {
+  background-color: #F8FAFC !important;
+  border-color: #E2E8F0 !important;
+  color: #0F172A !important;
+}
+
+html.light select option {
+  background-color: #FFFFFF !important;
+  color: #0F172A !important;
+}
+
+html.light .bg-slate-700 {
+  background-color: #CBD5E1 !important;
+}
+
 /* Custom scrollbars */
 ::-webkit-scrollbar {
   width: 6px;
@@ -93,10 +326,16 @@ body {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #252D3A;
+  background: #1E293B;
   border-radius: 9999px;
 }
 
-::-webkit-scrollbar-thumb:hover {
-  background: #3B82F6;
+html.light ::-webkit-scrollbar-thumb {
+  background: #CBD5E1;
 }
+
+::-webkit-scrollbar-thumb:hover {
+  background: #FF9933;
+}
+
+

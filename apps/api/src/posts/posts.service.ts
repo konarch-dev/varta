@@ -572,6 +572,14 @@ export class PostsService {
       })),
       poll: pollData,
       parentId: post.parentId,
+      replyToAuthor: (post as any).parent?.author
+        ? {
+            username: (post as any).parent.author.username,
+            displayName:
+              (post as any).parent.author.profile?.displayName ||
+              (post as any).parent.author.username,
+          }
+        : null,
       quotePost: post.quotePost
         ? {
             id: post.quotePost.id,
@@ -597,6 +605,16 @@ export class PostsService {
       isLiked,
       isReposted,
       isBookmarked,
+      groupId: post.groupId || null,
+      group: post.group
+        ? {
+            id: post.group.id,
+            name: post.group.name,
+            slug: post.group.slug,
+            category: post.group.category,
+            avatarUrl: post.group.avatarUrl,
+          }
+        : null,
     };
   }
 }

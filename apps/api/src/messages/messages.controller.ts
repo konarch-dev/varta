@@ -27,6 +27,12 @@ export class MessagesController {
     return this.messagesService.getConversations(user.id);
   }
 
+  @Get('unread-count')
+  @ApiOperation({ summary: 'Get total unread messages count for current user' })
+  async getUnreadCount(@CurrentUser() user: any) {
+    return this.messagesService.getUnreadCount(user.id);
+  }
+
   @Post('conversations')
   @ApiOperation({ summary: 'Find or start a DM conversation with a user' })
   async startConversation(
@@ -34,6 +40,16 @@ export class MessagesController {
     @Body('username') targetUsername: string,
   ) {
     return this.messagesService.getOrCreateConversation(user.id, targetUsername);
+  }
+
+  @Post('groups')
+  @ApiOperation({ summary: 'Create a group conversation with multiple members' })
+  async createGroup(
+    @CurrentUser() user: any,
+    @Body('title') title: string,
+    @Body('usernames') usernames: string[],
+  ) {
+    return this.messagesService.createGroupConversation(user.id, title, usernames);
   }
 
   @Get('conversations/:id')

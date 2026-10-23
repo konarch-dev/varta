@@ -80,7 +80,7 @@ async function main() {
       location: 'Bengaluru, Karnataka',
       website: 'https://aarav.dev',
       isVerified: true,
-      avatarUrl: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=200&auto=format&fit=crop&q=80',
+      avatarUrl: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=200&auto=format&fit=crop&crop=faces&q=80',
       coverUrl: 'https://images.unsplash.com/photo-1518770660439-4636190af475?w=1000&auto=format&fit=crop&q=80',
     },
     {
@@ -91,7 +91,7 @@ async function main() {
       location: 'Mumbai, Maharashtra',
       website: 'https://priyadesigns.in',
       isVerified: true,
-      avatarUrl: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=200&auto=format&fit=crop&q=80',
+      avatarUrl: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=200&auto=format&fit=crop&crop=faces&q=80',
       coverUrl: 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=1000&auto=format&fit=crop&q=80',
     },
     {
@@ -102,7 +102,7 @@ async function main() {
       location: 'Chennai, Tamil Nadu',
       website: 'https://cricstats.in',
       isVerified: false,
-      avatarUrl: 'https://images.unsplash.com/photo-1570295999919-56ceb5ecca61?w=200&auto=format&fit=crop&q=80',
+      avatarUrl: '/assets/avatar-rohit.jpg',
       coverUrl: 'https://images.unsplash.com/photo-1540747913346-19e32dc3e97e?w=1000&auto=format&fit=crop&q=80',
     },
     {
@@ -113,7 +113,7 @@ async function main() {
       location: 'Gurugram, Haryana',
       website: 'https://ananyaventures.in',
       isVerified: true,
-      avatarUrl: 'https://images.unsplash.com/photo-1580489944761-15a19d654956?w=200&auto=format&fit=crop&q=80',
+      avatarUrl: 'https://images.unsplash.com/photo-1580489944761-15a19d654956?w=200&auto=format&fit=crop&crop=faces&q=80',
       coverUrl: 'https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?w=1000&auto=format&fit=crop&q=80',
     },
   ];

@@ -2,6 +2,9 @@ import { NestFactory } from '@nestjs/core';
 import { ValidationPipe, Logger } from '@nestjs/common';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import cookieParser from 'cookie-parser';
+import express from 'express';
+import * as path from 'path';
+import * as fs from 'fs';
 import { AppModule } from './app.module';
 
 async function bootstrap() {
@@ -34,6 +37,24 @@ async function bootstrap() {
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
   });
+
+  // Static uploads directory serving
+  const uploadDir = path.isAbsolute(process.env.MEDIA_UPLOAD_DIR || '')
+    ? process.env.MEDIA_UPLOAD_DIR!
+    : path.resolve(process.cwd(), process.env.MEDIA_UPLOAD_DIR || './uploads');
+
+  if (!fs.existsSync(uploadDir)) {
+    fs.mkdirSync(uploadDir, { recursive: true });
+  }
+  const avatarsDir = path.join(uploadDir, 'avatars');
+  const coversDir = path.join(uploadDir, 'covers');
+  const postsDir = path.join(uploadDir, 'posts');
+  if (!fs.existsSync(avatarsDir)) fs.mkdirSync(avatarsDir, { recursive: true });
+  if (!fs.existsSync(coversDir)) fs.mkdirSync(coversDir, { recursive: true });
+  if (!fs.existsSync(postsDir)) fs.mkdirSync(postsDir, { recursive: true });
+
+  app.use('/uploads', express.static(uploadDir));
+  app.use('/api/v1/uploads', express.static(uploadDir));
 
   // Swagger OpenAPI Documentation
   const swaggerConfig = new DocumentBuilder()

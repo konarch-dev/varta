@@ -19,18 +19,18 @@ export default function BookmarksPage() {
 
   return (
     <MainLayout>
-      <div className="sticky top-0 z-30 bg-[#090B10]/80 backdrop-blur-md border-b border-[#252D3A] px-4 py-3 flex items-center gap-4">
+      <div className="sticky top-0 z-30 bg-[#050B14]/90 backdrop-blur-md border-b border-[#1E293B] px-4 py-3 flex items-center gap-4">
         <button
           onClick={() => router.back()}
-          className="p-2 rounded-full hover:bg-[#191F2B] text-slate-300 hover:text-white transition"
+          className="p-2 rounded-full hover:bg-[#101D2D] text-slate-300 hover:text-white transition"
         >
           <ArrowLeft size={18} />
         </button>
         <div className="flex flex-col">
-          <h2 className="text-base font-bold text-slate-100 flex items-center gap-2">
-            <Bookmark size={18} className="text-blue-400 fill-blue-400" />
+          <h1 className="text-base font-extrabold text-white flex items-center gap-2">
+            <Bookmark size={18} className="text-[#FF9933] fill-[#FF9933]" />
             Bookmarks
-          </h2>
+          </h1>
           <span className="text-xs text-slate-400">
             {data?.items?.length || 0} saved posts (private to you)
           </span>
@@ -40,7 +40,7 @@ export default function BookmarksPage() {
       <div className="flex flex-col">
         {isLoading ? (
           <div className="p-12 text-center text-xs text-slate-400 flex items-center justify-center gap-2">
-            <Loader2 size={18} className="animate-spin text-blue-500" />
+            <Loader2 size={18} className="animate-spin text-[#FF9933]" />
             <span>Loading bookmarks...</span>
           </div>
         ) : data?.items && data.items.length > 0 ? (

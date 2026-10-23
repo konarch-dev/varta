@@ -18,6 +18,7 @@ export interface UserSummary {
   bio?: string | null;
   followersCount?: number;
   followingCount?: number;
+  isFollowing?: boolean;
 }
 
 export interface CurrentUser extends UserSummary {
@@ -91,11 +92,23 @@ export interface PostItem {
   // Relations
   media: PostMediaItem[];
   poll?: PollItem | null;
+  groupId?: string | null;
+  group?: {
+    id: string;
+    name: string;
+    slug: string;
+    category: string;
+    avatarUrl?: string | null;
+  } | null;
   
   // Reposts & Quotes
   repostOf?: PostItem | null;
   quotePost?: PostItem | null;
   parentId?: string | null;
+  replyToAuthor?: {
+    username: string;
+    displayName?: string | null;
+  } | null;
 
   // Counters
   likeCount: number;
@@ -134,7 +147,11 @@ export interface NotificationItem {
 
 export interface ConversationItem {
   id: string;
-  otherMember: UserSummary;
+  isGroup?: boolean;
+  title?: string | null;
+  avatarUrl?: string | null;
+  otherMember: UserSummary | null;
+  members?: UserSummary[];
   lastMessage: {
     id: string;
     content: string;

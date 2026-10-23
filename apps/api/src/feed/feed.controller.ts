@@ -29,12 +29,14 @@ export class FeedController {
   @ApiOperation({ summary: 'Algorithmic discovery feed based on engagement and recency' })
   @ApiQuery({ name: 'cursor', required: false })
   @ApiQuery({ name: 'limit', required: false })
+  @ApiQuery({ name: 'category', required: false })
   async getForYouFeed(
     @CurrentUser() viewer: any,
     @Query('cursor') cursor?: string,
     @Query('limit') limit?: number,
+    @Query('category') category?: string,
   ) {
-    return this.feedService.getForYouFeed(viewer?.id, cursor, limit ? Number(limit) : 20);
+    return this.feedService.getForYouFeed(viewer?.id, cursor, limit ? Number(limit) : 20, category);
   }
 
   @Get('user/:username')
@@ -42,17 +44,20 @@ export class FeedController {
   @ApiOperation({ summary: "Get a specific user's posts timeline" })
   @ApiQuery({ name: 'cursor', required: false })
   @ApiQuery({ name: 'limit', required: false })
+  @ApiQuery({ name: 'tab', required: false })
   async getUserPosts(
     @Param('username') username: string,
     @CurrentUser() viewer: any,
     @Query('cursor') cursor?: string,
     @Query('limit') limit?: number,
+    @Query('tab') tab?: string,
   ) {
     return this.feedService.getUserPosts(
       username,
       viewer?.id,
       cursor,
       limit ? Number(limit) : 20,
+      tab,
     );
   }
 

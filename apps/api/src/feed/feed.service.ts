@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { Prisma } from '@varta/database';
 import { PrismaService } from '../database/prisma.service';
 import { PostsService } from '../posts/posts.service';
 
@@ -47,20 +48,57 @@ export class FeedService {
     const excludedIds = await this.getExcludedUserIds(userId);
     const eligibleAuthorIds = followingIds.filter((id) => !excludedIds.includes(id));
 
+    if (eligibleAuthorIds.length === 0) {
+      return { items: [], nextCursor: null, hasMore: false };
+    }
+
+    let offset = 0;
+    if (cursor && /^\d+$/.test(cursor)) {
+      offset = parseInt(cursor, 10);
+    }
+
+    // Twitter-style ranking for following feed:
+    // Balances newest uploads with likes & comments engagement
+    const scoredRows = await this.prisma.$queryRaw<Array<{ id: string }>>`
+      SELECT p.id
+      FROM "Post" p
+      WHERE p."parentId" IS NULL
+        AND p."deletedAt" IS NULL
+        AND p."authorId" IN (${Prisma.join(eligibleAuthorIds)})
+      ORDER BY
+        ROUND(
+          CAST(
+            ((p."likeCount" * 2.0 + p."replyCount" * 4.0 + p."repostCount" * 2.5 + 12.0) /
+             POWER(EXTRACT(EPOCH FROM (NOW() - p."createdAt")) / 3600.0 + 1.5, 1.15))
+            AS NUMERIC
+          ), 4
+        ) DESC,
+        p."createdAt" DESC,
+        p.id DESC
+      LIMIT ${limit + 1} OFFSET ${offset}
+    `;
+
+    const hasMore = scoredRows.length > limit;
+    const itemsRows = hasMore ? scoredRows.slice(0, limit) : scoredRows;
+    const postIds = itemsRows.map((r) => r.id);
+
+    if (postIds.length === 0) {
+      return { items: [], nextCursor: null, hasMore: false };
+    }
+
     const posts = await this.prisma.post.findMany({
-      where: {
-        authorId: { in: eligibleAuthorIds },
-        parentId: null, // Top-level posts
-        deletedAt: null,
-      },
-      take: limit + 1,
-      ...(cursor && {
-        cursor: { id: cursor },
-        skip: 1,
-      }),
-      orderBy: { createdAt: 'desc' },
+      where: { id: { in: postIds } },
       include: {
         author: { include: { profile: true } },
+        group: {
+          select: {
+            id: true,
+            name: true,
+            slug: true,
+            category: true,
+            avatarUrl: true,
+          },
+        },
         media: { orderBy: { order: 'asc' } },
         poll: { include: { options: { orderBy: { order: 'asc' } } } },
         quotePost: {
@@ -72,13 +110,14 @@ export class FeedService {
       },
     });
 
-    const hasMore = posts.length > limit;
-    const items = hasMore ? posts.slice(0, limit) : posts;
-    const nextCursor = hasMore ? items[items.length - 1].id : null;
+    const postMap = new Map(posts.map((p) => [p.id, p]));
+    const orderedPosts = postIds.map((id) => postMap.get(id)).filter(Boolean);
 
     const formatted = await Promise.all(
-      items.map((p) => this.postsService.formatPostResponse(p, userId)),
+      orderedPosts.map((p) => this.postsService.formatPostResponse(p!, userId)),
     );
+
+    const nextCursor = hasMore ? String(offset + limit) : null;
 
     return {
       items: formatted,
@@ -87,7 +126,12 @@ export class FeedService {
     };
   }
 
-  async getForYouFeed(viewerId?: string, cursor?: string, limit = 20) {
+  async getForYouFeed(
+    viewerId?: string,
+    cursor?: string,
+    limit = 20,
+    category?: string,
+  ) {
     const excludedIds = await this.getExcludedUserIds(viewerId);
 
     // Filter out private accounts unless followed by viewer
@@ -101,24 +145,120 @@ export class FeedService {
       allowedPrivateIds.push(viewerId);
     }
 
+    let normalizedCategory: string | undefined;
+    if (category && category.trim()) {
+      const c = category.trim().toLowerCase();
+      if (
+        c === 'india-trends' ||
+        c === 'india trends' ||
+        c === 'indiatrends' ||
+        c === 'india'
+      ) {
+        normalizedCategory = 'India Trends';
+      } else if (c === 'tech' || c === 'technology') {
+        normalizedCategory = 'Technology';
+      } else if (c === 'travel') {
+        normalizedCategory = 'Travel';
+      } else if (c === 'food' || c === 'cuisine' || c === 'foods') {
+        normalizedCategory = 'Food';
+      } else if (c === 'lifestyle' || c === 'life style' || c === 'life-style') {
+        normalizedCategory = 'Lifestyle';
+      } else if (
+        c === 'fitness & health' ||
+        c === 'fitness-health' ||
+        c === 'health' ||
+        c === 'fitness' ||
+        c === 'health & fitness'
+      ) {
+        normalizedCategory = 'Fitness & Health';
+      } else if (c === 'sports' || c === 'sport') {
+        normalizedCategory = 'Sports';
+      } else if (c === 'entertainment') {
+        normalizedCategory = 'Entertainment';
+      } else {
+        normalizedCategory = category.trim();
+      }
+    }
+
+    let offset = 0;
+    if (cursor && /^\d+$/.test(cursor)) {
+      offset = parseInt(cursor, 10);
+    }
+
+    const conditions: Prisma.Sql[] = [
+      Prisma.sql`p."parentId" IS NULL`,
+      Prisma.sql`p."deletedAt" IS NULL`,
+    ];
+
+    if (excludedIds.length > 0) {
+      conditions.push(Prisma.sql`p."authorId" NOT IN (${Prisma.join(excludedIds)})`);
+    }
+
+    if (allowedPrivateIds.length > 0) {
+      conditions.push(
+        Prisma.sql`(u."isPrivate" = false OR p."authorId" IN (${Prisma.join(allowedPrivateIds)}))`
+      );
+    } else {
+      conditions.push(Prisma.sql`u."isPrivate" = false`);
+    }
+
+    if (normalizedCategory) {
+      conditions.push(
+        Prisma.sql`(g.category ILIKE ${normalizedCategory} OR p.content ILIKE ${'%' + normalizedCategory + '%'})`
+      );
+    }
+
+    const whereClause = Prisma.sql`WHERE ${Prisma.join(conditions, ' AND ')}`;
+
+    // Twitter-style ranking score:
+    // 1. Likes: 2.0x
+    // 2. Comments/Replies: 4.0x (prioritizing active conversation and community debate)
+    // 3. Reposts: 2.5x
+    // 4. Newest uploads: recency boost base of 12.0 with gravity time decay ((ageInHours + 1.5) ^ 1.15)
+    const scoredRows = await this.prisma.$queryRaw<Array<{ id: string }>>`
+      SELECT p.id
+      FROM "Post" p
+      INNER JOIN "User" u ON p."authorId" = u.id
+      LEFT JOIN "Group" g ON p."groupId" = g.id
+      ${whereClause}
+      ORDER BY
+        ROUND(
+          CAST(
+            ((p."likeCount" * 2.0 + p."replyCount" * 4.0 + p."repostCount" * 2.5 + 12.0) /
+             POWER(EXTRACT(EPOCH FROM (NOW() - p."createdAt")) / 3600.0 + 1.5, 1.15))
+            AS NUMERIC
+          ), 4
+        ) DESC,
+        p."createdAt" DESC,
+        p.id DESC
+      LIMIT ${limit + 1} OFFSET ${offset}
+    `;
+
+    const hasMore = scoredRows.length > limit;
+    const itemsRows = hasMore ? scoredRows.slice(0, limit) : scoredRows;
+    const postIds = itemsRows.map((r) => r.id);
+
+    if (postIds.length === 0) {
+      return {
+        items: [],
+        nextCursor: null,
+        hasMore: false,
+      };
+    }
+
     const posts = await this.prisma.post.findMany({
-      where: {
-        parentId: null,
-        deletedAt: null,
-        authorId: { notIn: excludedIds },
-        OR: [
-          { author: { isPrivate: false } },
-          { authorId: { in: allowedPrivateIds } },
-        ],
-      },
-      take: limit * 2, // Sample a larger batch to rank
-      ...(cursor && {
-        cursor: { id: cursor },
-        skip: 1,
-      }),
-      orderBy: { createdAt: 'desc' },
+      where: { id: { in: postIds } },
       include: {
         author: { include: { profile: true } },
+        group: {
+          select: {
+            id: true,
+            name: true,
+            slug: true,
+            category: true,
+            avatarUrl: true,
+          },
+        },
         media: { orderBy: { order: 'asc' } },
         poll: { include: { options: { orderBy: { order: 'asc' } } } },
         quotePost: {
@@ -130,30 +270,14 @@ export class FeedService {
       },
     });
 
-    // Calculate score for transparent ranking
-    const now = Date.now();
-    const scoredPosts = posts.map((post) => {
-      const ageInHours = (now - post.createdAt.getTime()) / (1000 * 60 * 60);
-      const engagement =
-        post.likeCount * 1.0 +
-        post.replyCount * 1.5 +
-        post.repostCount * 2.0 +
-        post.quoteCount * 1.5 +
-        post.bookmarkCount * 1.2;
-      const decay = Math.pow(ageInHours + 2, 1.4);
-      const score = (engagement + 5) / decay;
-      return { post, score };
-    });
-
-    scoredPosts.sort((a, b) => b.score - a.score);
-
-    const hasMore = scoredPosts.length > limit;
-    const selected = hasMore ? scoredPosts.slice(0, limit) : scoredPosts;
-    const nextCursor = hasMore ? selected[selected.length - 1].post.id : null;
+    const postMap = new Map(posts.map((p) => [p.id, p]));
+    const orderedPosts = postIds.map((id) => postMap.get(id)).filter(Boolean);
 
     const formatted = await Promise.all(
-      selected.map(({ post }) => this.postsService.formatPostResponse(post, viewerId)),
+      orderedPosts.map((p) => this.postsService.formatPostResponse(p!, viewerId)),
     );
+
+    const nextCursor = hasMore ? String(offset + limit) : null;
 
     return {
       items: formatted,
@@ -162,34 +286,159 @@ export class FeedService {
     };
   }
 
-  async getUserPosts(username: string, viewerId?: string, cursor?: string, limit = 20) {
+  async getUserPosts(
+    username: string,
+    viewerId?: string,
+    cursor?: string,
+    limit = 20,
+    tab = 'posts',
+  ) {
     const user = await this.prisma.user.findUnique({
       where: { username: username.toLowerCase() },
     });
     if (!user) return { items: [], nextCursor: null, hasMore: false };
 
-    const posts = await this.prisma.post.findMany({
-      where: {
-        authorId: user.id,
-        deletedAt: null,
+    const normalizedTab = (tab || 'posts').toLowerCase();
+
+    // Check block status (bidirectional)
+    if (viewerId && viewerId !== user.id) {
+      const isBlocked = await this.prisma.block.findFirst({
+        where: {
+          OR: [
+            { blockerId: user.id, blockedId: viewerId },
+            { blockerId: viewerId, blockedId: user.id },
+          ],
+        },
+      });
+      if (isBlocked) {
+        return { items: [], nextCursor: null, hasMore: false };
+      }
+    }
+
+    // Check account privacy
+    if (user.isPrivate && viewerId !== user.id) {
+      const isFollowing = viewerId
+        ? await this.prisma.follow.findUnique({
+            where: {
+              followerId_followingId: {
+                followerId: viewerId,
+                followingId: user.id,
+              },
+            },
+          })
+        : null;
+      if (!isFollowing) {
+        return { items: [], nextCursor: null, hasMore: false };
+      }
+    }
+
+    const postInclude = {
+      author: { include: { profile: true } },
+      group: {
+        select: {
+          id: true,
+          name: true,
+          slug: true,
+          category: true,
+          avatarUrl: true,
+        },
       },
+      media: { orderBy: { order: 'asc' as const } },
+      poll: { include: { options: { orderBy: { order: 'asc' as const } } } },
+      quotePost: {
+        include: {
+          author: { include: { profile: true } },
+          media: true,
+        },
+      },
+      parent: {
+        include: {
+          author: { include: { profile: true } },
+        },
+      },
+    };
+
+    // 1. BOOKMARKS TAB
+    if (normalizedTab === 'bookmarks') {
+      // Bookmarks are private to the user themselves
+      if (!viewerId || viewerId !== user.id) {
+        return { items: [], nextCursor: null, hasMore: false, isPrivate: true };
+      }
+      return this.getBookmarks(user.id, cursor, limit);
+    }
+
+    // 2. LIKES TAB
+    if (normalizedTab === 'likes') {
+      const likes = await this.prisma.like.findMany({
+        where: {
+          userId: user.id,
+          post: {
+            deletedAt: null,
+          },
+        },
+        take: limit + 1,
+        ...(cursor && {
+          cursor: { id: cursor },
+          skip: 1,
+        }),
+        orderBy: { createdAt: 'desc' },
+        include: {
+          post: {
+            include: postInclude,
+          },
+        },
+      });
+
+      const hasMore = likes.length > limit;
+      const items = hasMore ? likes.slice(0, limit) : likes;
+      const nextCursor = hasMore ? items[items.length - 1].id : null;
+
+      const formatted = await Promise.all(
+        items
+          .filter((l) => l.post && !l.post.deletedAt)
+          .map((l) => this.postsService.formatPostResponse(l.post, viewerId)),
+      );
+
+      return {
+        items: formatted,
+        nextCursor,
+        hasMore,
+      };
+    }
+
+    // 3. POSTS, REPLIES, MEDIA TABS
+    let whereCondition: Prisma.PostWhereInput = {
+      authorId: user.id,
+      deletedAt: null,
+    };
+
+    if (normalizedTab === 'media') {
+      whereCondition = {
+        ...whereCondition,
+        media: { some: {} },
+      };
+    } else if (normalizedTab === 'replies') {
+      whereCondition = {
+        ...whereCondition,
+        parentId: { not: null },
+      };
+    } else {
+      // Default 'posts': original posts & quotes (excluding replies)
+      whereCondition = {
+        ...whereCondition,
+        parentId: null,
+      };
+    }
+
+    const posts = await this.prisma.post.findMany({
+      where: whereCondition,
       take: limit + 1,
       ...(cursor && {
         cursor: { id: cursor },
         skip: 1,
       }),
       orderBy: { createdAt: 'desc' },
-      include: {
-        author: { include: { profile: true } },
-        media: { orderBy: { order: 'asc' } },
-        poll: { include: { options: { orderBy: { order: 'asc' } } } },
-        quotePost: {
-          include: {
-            author: { include: { profile: true } },
-            media: true,
-          },
-        },
-      },
+      include: postInclude,
     });
 
     const hasMore = posts.length > limit;
@@ -220,12 +469,26 @@ export class FeedService {
         post: {
           include: {
             author: { include: { profile: true } },
-            media: true,
+            group: {
+              select: {
+                id: true,
+                name: true,
+                slug: true,
+                category: true,
+                avatarUrl: true,
+              },
+            },
+            media: { orderBy: { order: 'asc' } },
             poll: { include: { options: true } },
             quotePost: {
               include: {
                 author: { include: { profile: true } },
                 media: true,
+              },
+            },
+            parent: {
+              include: {
+                author: { include: { profile: true } },
               },
             },
           },
@@ -239,7 +502,7 @@ export class FeedService {
 
     const formatted = await Promise.all(
       items
-        .filter((b) => !b.post.deletedAt)
+        .filter((b) => b.post && !b.post.deletedAt)
         .map((b) => this.postsService.formatPostResponse(b.post, userId)),
     );
 

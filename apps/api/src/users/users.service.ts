@@ -2,7 +2,10 @@ import {
   Injectable,
   NotFoundException,
   ForbiddenException,
+  BadRequestException,
+  ConflictException,
 } from '@nestjs/common';
+import * as argon2 from 'argon2';
 import { PrismaService } from '../database/prisma.service';
 import { UpdateProfileDto } from '@varta/shared';
 
@@ -131,9 +134,27 @@ export class UsersService {
         ...(dto.bio !== undefined && { bio: dto.bio }),
         ...(dto.location !== undefined && { location: dto.location }),
         ...(dto.website !== undefined && { website: dto.website }),
+        ...(dto.avatarUrl !== undefined && { avatarUrl: dto.avatarUrl }),
+        ...(dto.coverUrl !== undefined && { coverUrl: dto.coverUrl }),
       },
     });
 
+    return updated;
+  }
+
+  async updateAvatar(userId: string, avatarUrl: string) {
+    const updated = await this.prisma.userProfile.update({
+      where: { userId },
+      data: { avatarUrl },
+    });
+    return updated;
+  }
+
+  async updateCover(userId: string, coverUrl: string) {
+    const updated = await this.prisma.userProfile.update({
+      where: { userId },
+      data: { coverUrl },
+    });
     return updated;
   }
 
@@ -222,5 +243,83 @@ export class UsersService {
       nextCursor,
       hasMore,
     };
+  }
+
+  async changePassword(userId: string, currentPassword: string, newPassword: string) {
+    if (!currentPassword || !newPassword) {
+      throw new BadRequestException('Current and new password are required');
+    }
+    if (newPassword.length < 6) {
+      throw new BadRequestException('New password must be at least 6 characters');
+    }
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+    });
+    if (!user) throw new NotFoundException('User not found');
+
+    const isValid = await argon2.verify(user.passwordHash, currentPassword);
+    if (!isValid) {
+      throw new BadRequestException('Current password is incorrect');
+    }
+
+    const newHash = await argon2.hash(newPassword);
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: { passwordHash: newHash },
+    });
+
+    return { success: true, message: 'Password updated successfully' };
+  }
+
+  async toggleVerified(userId: string) {
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    if (!user) throw new NotFoundException('User not found');
+    const updated = await this.prisma.user.update({
+      where: { id: userId },
+      data: { isVerified: !user.isVerified },
+      select: { id: true, username: true, isVerified: true },
+    });
+    return {
+      success: true,
+      isVerified: updated.isVerified,
+      message: updated.isVerified ? 'VARTA+ Premium activated with Verified Checkmark!' : 'VARTA+ Subscription cancelled.',
+    };
+  }
+
+  async updateAccount(userId: string, data: { username?: string; email?: string }) {
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    if (!user) throw new NotFoundException('User not found');
+
+    if (data.username && data.username.toLowerCase() !== user.username) {
+      const existing = await this.prisma.user.findUnique({
+        where: { username: data.username.toLowerCase() },
+      });
+      if (existing) throw new ConflictException('Username is already taken');
+    }
+
+    if (data.email && data.email.toLowerCase() !== user.email) {
+      const existing = await this.prisma.user.findUnique({
+        where: { email: data.email.toLowerCase() },
+      });
+      if (existing) throw new ConflictException('Email address is already in use');
+    }
+
+    const updated = await this.prisma.user.update({
+      where: { id: userId },
+      data: {
+        ...(data.username && { username: data.username.toLowerCase().trim() }),
+        ...(data.email && { email: data.email.toLowerCase().trim() }),
+      },
+      select: {
+        id: true,
+        username: true,
+        email: true,
+        role: true,
+        status: true,
+        isVerified: true,
+      },
+    });
+
+    return updated;
   }
 }
