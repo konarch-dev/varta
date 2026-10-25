@@ -1674,13 +1674,13 @@ function MessagesContent() {
       {/* ============================================================ */}
       {activeCall && (
         <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in duration-200">
-          <div className="w-full max-w-md bg-[#0B1422] border border-[#1E293B] rounded-3xl p-6 flex flex-col items-center gap-5 text-center shadow-2xl relative overflow-hidden">
+          <div className="w-full max-w-md bg-white dark:bg-[#0B1422] border border-slate-200 dark:border-[#1E293B] rounded-3xl p-6 flex flex-col items-center gap-5 text-center shadow-2xl relative overflow-hidden varta-call-dialog">
             {/* Ambient background glow */}
             <div className="absolute -top-24 left-1/2 -translate-x-1/2 w-64 h-64 bg-[#FF9933]/15 rounded-full blur-3xl pointer-events-none" />
 
             {/* Video Call Active Local Preview Container */}
             {activeCall.type === 'video' && (
-              <div className="w-full aspect-video bg-[#050B14] rounded-2xl overflow-hidden border border-[#1E293B] relative shadow-inner mb-1 flex items-center justify-center">
+              <div className="w-full aspect-video bg-[#050B14] rounded-2xl overflow-hidden border border-slate-200 dark:border-[#1E293B] relative shadow-inner mb-1 flex items-center justify-center">
                 <video
                   ref={localVideoRef}
                   autoPlay
@@ -1705,9 +1705,9 @@ function MessagesContent() {
 
             {/* Pulsing Avatar for Audio & Video Calling */}
             <div className="relative">
-              <div className="w-24 h-24 rounded-full bg-[#101D2D] border-2 border-[#FF9933] flex items-center justify-center overflow-hidden shadow-xl">
+              <div className="w-24 h-24 rounded-full bg-slate-100 dark:bg-[#101D2D] border-2 border-[#FF9933] flex items-center justify-center overflow-hidden shadow-xl">
                 {activeCall.target.isGroup ? (
-                  <div className="w-full h-full bg-gradient-to-br from-[#FF9933]/30 to-[#138808]/20 flex items-center justify-center text-[#FF9933]">
+                  <div className="w-full h-full bg-gradient-to-br from-[#FF9933]/25 to-[#00C853]/20 flex items-center justify-center text-[#E65100] dark:text-[#FF9933]">
                     <Users size={36} />
                   </div>
                 ) : activeCall.target.avatarUrl ? (
@@ -1717,7 +1717,7 @@ function MessagesContent() {
                     className="w-full h-full object-cover"
                   />
                 ) : (
-                  <span className="text-2xl font-bold text-[#FF9933]">
+                  <span className="text-2xl font-bold text-[#E65100] dark:text-[#FF9933]">
                     {activeCall.target.name.charAt(0).toUpperCase()}
                   </span>
                 )}
@@ -1728,21 +1728,23 @@ function MessagesContent() {
             </div>
 
             {/* Target Information */}
-            <div>
-              <h3 className="text-lg font-bold text-white flex items-center justify-center gap-1.5">
+            <div className="flex flex-col items-center">
+              <h3 className="text-xl font-black text-slate-900 dark:text-white flex items-center justify-center gap-1.5 call-title tracking-tight">
                 {activeCall.target.name}
               </h3>
               {activeCall.target.username && (
-                <p className="text-xs text-slate-400 mt-0.5">@{activeCall.target.username}</p>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 call-subtitle">
+                  @{activeCall.target.username}
+                </p>
               )}
               {activeCall.target.isGroup && (
-                <p className="text-xs text-[#FF9933] mt-0.5">
+                <p className="text-xs text-[#E65100] dark:text-[#FF9933] font-bold mt-0.5 call-group-label">
                   Group Call ({activeCall.target.memberCount} participants)
                 </p>
               )}
 
               {/* Status Badge */}
-              <div className="mt-2.5 text-xs font-semibold px-3 py-1 rounded-full bg-[#101D2D] text-[#FF9933] inline-flex items-center gap-2 border border-[#1E293B]">
+              <div className="mt-2.5 text-xs font-semibold px-3 py-1 rounded-full bg-slate-100 dark:bg-[#101D2D] text-slate-800 dark:text-[#FF9933] inline-flex items-center gap-2 border border-slate-200 dark:border-[#1E293B] call-badge">
                 {activeCall.status === 'calling' ? (
                   <>
                     <span className="w-2 h-2 rounded-full bg-[#FF9933] animate-ping" />
@@ -1750,12 +1752,12 @@ function MessagesContent() {
                   </>
                 ) : activeCall.status === 'incoming' ? (
                   <>
-                    <PhoneCall size={14} className="animate-bounce" />
+                    <PhoneCall size={14} className="animate-bounce text-[#FF9933]" />
                     <span>Incoming {activeCall.type === 'video' ? 'Video' : 'Voice'} Call</span>
                   </>
                 ) : (
                   <>
-                    <span className="w-2 h-2 rounded-full bg-emerald-400" />
+                    <span className="w-2 h-2 rounded-full bg-emerald-500" />
                     <span>Connected • {formatCallDuration(activeCall.duration)}</span>
                   </>
                 )}
@@ -1786,10 +1788,10 @@ function MessagesContent() {
                 <button
                   type="button"
                   onClick={endCall}
-                  className="p-4 rounded-full bg-red-600 hover:bg-red-700 text-white shadow-lg transition active:scale-95 cursor-pointer"
+                  className="p-4 rounded-full bg-red-600 hover:bg-red-700 text-white shadow-lg transition active:scale-95 cursor-pointer call-btn-danger"
                   title="Decline"
                 >
-                  <PhoneOff size={22} />
+                  <PhoneOff size={22} className="text-white" />
                 </button>
                 <button
                   type="button"
@@ -1797,7 +1799,7 @@ function MessagesContent() {
                   className="p-4 rounded-full bg-emerald-600 hover:bg-emerald-700 text-white shadow-lg transition active:scale-95 cursor-pointer"
                   title="Accept"
                 >
-                  <PhoneCall size={22} />
+                  <PhoneCall size={22} className="text-white" />
                 </button>
               </div>
             ) : (
@@ -1806,10 +1808,10 @@ function MessagesContent() {
                 <button
                   type="button"
                   onClick={toggleMute}
-                  className={`p-3.5 rounded-full transition cursor-pointer border ${
+                  className={`p-3.5 rounded-full transition cursor-pointer border call-control-btn ${
                     activeCall.isMuted
-                      ? 'bg-amber-500/20 border-amber-500 text-amber-400'
-                      : 'bg-[#101D2D] border-[#1E293B] text-slate-200 hover:text-white hover:border-[#FF9933]'
+                      ? 'bg-amber-100 border-amber-300 text-amber-800 dark:bg-amber-500/20 dark:border-amber-500 dark:text-amber-400'
+                      : 'bg-slate-100 hover:bg-slate-200 border-slate-200 text-slate-700 hover:text-slate-900 dark:bg-[#101D2D] dark:border-[#1E293B] dark:text-slate-200 dark:hover:text-white dark:hover:border-[#FF9933]'
                   }`}
                   title={activeCall.isMuted ? 'Unmute microphone' : 'Mute microphone'}
                 >
@@ -1820,10 +1822,10 @@ function MessagesContent() {
                 <button
                   type="button"
                   onClick={endCall}
-                  className="p-4 rounded-full bg-red-600 hover:bg-red-700 text-white shadow-lg transition active:scale-95 cursor-pointer hover:shadow-red-600/30"
+                  className="p-4 rounded-full bg-red-600 hover:bg-red-700 text-white shadow-lg transition active:scale-95 cursor-pointer hover:shadow-red-600/30 call-btn-danger"
                   title="End Call"
                 >
-                  <PhoneOff size={22} />
+                  <PhoneOff size={22} className="text-white" />
                 </button>
 
                 {/* Video Camera Toggle */}
@@ -1831,10 +1833,10 @@ function MessagesContent() {
                   <button
                     type="button"
                     onClick={toggleVideo}
-                    className={`p-3.5 rounded-full transition cursor-pointer border ${
+                    className={`p-3.5 rounded-full transition cursor-pointer border call-control-btn ${
                       activeCall.isVideoOff
-                        ? 'bg-amber-500/20 border-amber-500 text-amber-400'
-                        : 'bg-[#101D2D] border-[#1E293B] text-slate-200 hover:text-white hover:border-[#FF9933]'
+                        ? 'bg-amber-100 border-amber-300 text-amber-800 dark:bg-amber-500/20 dark:border-amber-500 dark:text-amber-400'
+                        : 'bg-slate-100 hover:bg-slate-200 border-slate-200 text-slate-700 hover:text-slate-900 dark:bg-[#101D2D] dark:border-[#1E293B] dark:text-slate-200 dark:hover:text-white dark:hover:border-[#FF9933]'
                     }`}
                     title={activeCall.isVideoOff ? 'Start Camera' : 'Pause Camera'}
                   >

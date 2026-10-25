@@ -8,13 +8,21 @@ import {
   Lock,
   Eye,
   EyeOff,
-  Users,
-  Compass,
+  MessageSquare,
+  MessageCircle,
+  MapPin,
   ShieldCheck,
   Smartphone,
   Loader2,
   AlertCircle,
   Sparkles,
+  Heart,
+  Repeat2,
+  BarChart2,
+  BadgeCheck,
+  Flame,
+  Bookmark,
+  MoreHorizontal,
 } from 'lucide-react';
 import { VartaLogo } from '../../../components/common/VartaLogo';
 import { useAuthStore } from '../../../stores/authStore';
@@ -42,7 +50,7 @@ const GoogleIcon = ({ className = 'w-5 h-5' }: { className?: string }) => (
   </svg>
 );
 
-// Apple White Vector Icon
+// Apple Black Vector Icon
 const AppleIcon = ({ className = 'w-5 h-5' }: { className?: string }) => (
   <svg className={className} viewBox="0 0 170 170" fill="currentColor">
     <path d="M150.37 130.25c-2.45 5.66-5.35 10.87-8.71 15.66-4.58 6.53-8.33 11.05-11.22 13.56-4.48 4.12-9.28 6.23-14.42 6.35-3.69 0-8.14-1.05-13.32-3.18-5.19-2.12-9.97-3.17-14.34-3.17-4.58 0-9.49 1.05-14.74 3.17-5.26 2.13-9.5 3.24-12.74 3.35-4.35.13-9.16-1.9-14.42-6.08-3.69-3.06-7.7-7.85-12.04-14.36-6.19-9.35-11.1-20.08-14.73-32.18-3.63-12.1-5.45-23.51-5.45-34.24 0-14.93 3.83-27.13 11.48-36.6 7.66-9.47 17.2-14.28 28.63-14.43 4.58 0 9.87 1.17 15.86 3.53 5.99 2.35 10.02 3.65 12.09 3.89 2.07.24 6.09-.99 12.08-3.7 5.99-2.71 11.04-3.95 15.15-3.72 10.23.47 18.96 4.12 26.18 10.96 7.22 6.83 11.85 15.14 13.9 24.91-9.24 5.54-13.79 13.35-13.65 23.44.15 8.97 3.56 16.52 10.23 22.65 6.67 6.13 14.54 9.68 23.6 10.66-1.52 5.08-3.32 10.08-5.41 15.01zM119.22 33.09c0-6.14 2.22-12.03 6.67-17.67 4.45-5.64 10.03-9.67 16.74-12.09-.34 6.02-2.6 11.8-6.79 17.34-4.19 5.54-9.73 9.67-16.62 12.42z" />
@@ -59,6 +67,32 @@ export default function LoginPage() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isResending, setIsResending] = useState(false);
   const [resendSuccess, setResendSuccess] = useState<string | null>(null);
+
+  // Sample post interactive state
+  const [liked, setLiked] = useState(false);
+  const [likeCount, setLikeCount] = useState(8942);
+  const [reposted, setReposted] = useState(false);
+  const [repostCount, setRepostCount] = useState(1420);
+
+  const handleToggleLike = () => {
+    if (liked) {
+      setLiked(false);
+      setLikeCount((c) => c - 1);
+    } else {
+      setLiked(true);
+      setLikeCount((c) => c + 1);
+    }
+  };
+
+  const handleToggleRepost = () => {
+    if (reposted) {
+      setReposted(false);
+      setRepostCount((c) => c - 1);
+    } else {
+      setReposted(true);
+      setRepostCount((c) => c + 1);
+    }
+  };
 
   const handleResend = async () => {
     if (!identifier.trim()) return;
@@ -109,121 +143,311 @@ export default function LoginPage() {
   return (
     <div
       suppressHydrationWarning
-      className="relative min-h-screen w-full flex items-center justify-center bg-cover bg-center bg-no-repeat overflow-x-hidden selection:bg-[#FF7A00] selection:text-white"
+      className="relative min-h-screen w-full flex items-center justify-center bg-cover bg-[position:center_top] lg:bg-center bg-no-repeat overflow-x-hidden selection:bg-[#FF6200] selection:text-white bg-[url('/assets/varanasi-mobile-bg.jpg')] lg:bg-[url('/assets/varanasi-login-bg.jpg')]"
       style={{
-        backgroundImage: "url('/assets/login-bg.jpg')",
         fontFamily:
           '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif',
       }}
     >
-      {/* Light / Dark Adaptive Cinematic Vignette Overlay */}
-      <div className="absolute inset-0 bg-gradient-to-r from-amber-50/95 via-white/90 to-orange-50/95 dark:from-[#030712]/90 dark:via-[#070E18]/70 dark:to-[#030712]/92 backdrop-blur-[2px]" />
+      {/* Scoped style to prevent browser user-agent blue autofill background */}
+      <style
+        dangerouslySetInnerHTML={{
+          __html: `
+            input:-webkit-autofill,
+            input:-webkit-autofill:hover, 
+            input:-webkit-autofill:focus, 
+            input:-webkit-autofill:active {
+              -webkit-box-shadow: 0 0 0 1000px #FFFFFF inset !important;
+              box-shadow: 0 0 0 1000px #FFFFFF inset !important;
+              -webkit-text-fill-color: #0B1422 !important;
+              caret-color: #0B1422 !important;
+              transition: background-color 50000s ease-in-out 0s !important;
+            }
+          `,
+        }}
+      />
 
-      {/* Main Dual-Column Content */}
-      <div className="relative z-10 w-full max-w-[1340px] min-h-screen flex flex-col justify-between p-6 sm:p-10 lg:p-14">
-        {/* Top Header Logo */}
-        <header className="w-full flex items-center justify-between">
+      {/* Daylight Warm Ambient Gradient Overlay */}
+      {/* Mobile: Ultra-light transparent top/mid so the woman's face is vividly visible */}
+      <div className="absolute inset-0 bg-gradient-to-b from-white/20 via-transparent to-white/70 lg:bg-gradient-to-r lg:from-amber-50/90 lg:via-white/75 lg:to-amber-50/70 pointer-events-none" />
+
+      {/* Decorative Flying Birds in Sky (Desktop) */}
+      <div className="absolute top-10 left-1/3 opacity-40 pointer-events-none hidden lg:block">
+        <svg width="180" height="60" viewBox="0 0 180 60" fill="currentColor" className="text-slate-800">
+          <path d="M10,20 Q18,8 26,16 Q34,8 42,20 Q32,15 26,22 Q20,15 10,20 Z" />
+          <path d="M70,35 Q76,26 82,32 Q88,26 94,35 Q86,31 82,36 Q78,31 70,35 Z" />
+          <path d="M130,15 Q137,4 144,11 Q151,4 158,15 Q149,10 144,16 Q139,10 130,15 Z" />
+        </svg>
+      </div>
+
+      {/* Main Container */}
+      <div className="relative z-10 w-full max-w-[1380px] min-h-screen flex flex-col justify-between p-4 sm:p-6 lg:p-12">
+        {/* Top Header: Logo on Left & Script Callout on Right */}
+        <header className="w-full flex items-center justify-between pt-1 sm:pt-2">
           <Link href="/" className="inline-block transition-transform hover:scale-105">
             <VartaLogo size={42} showText={true} showTagline={true} />
           </Link>
-        </header>
 
-        {/* Center Grid: Left Hero & Right Login Card */}
-        <div className="w-full grid grid-cols-1 lg:grid-cols-12 gap-10 lg:gap-8 items-center my-auto py-8">
-          {/* LEFT COLUMN: 3D VARTA Logo, Hero Title & Badges */}
-          <div className="lg:col-span-7 flex flex-col items-start justify-center pr-0 lg:pr-8">
-            {/* Prominent 3D VARTA Logo Emblem in the middle */}
-            <div className="mb-6 sm:mb-8 flex flex-col items-start">
-              <div className="relative group">
-                {/* Soft ambient saffron-cyan-green glow behind the 3D emblem */}
-                <div className="absolute -inset-6 bg-gradient-to-r from-[#FF7A00]/25 via-[#0284C7]/20 to-[#00C853]/25 dark:from-[#FF7A00]/35 dark:via-[#0284C7]/25 dark:to-[#00C853]/35 rounded-3xl blur-2xl opacity-75 group-hover:opacity-100 transition duration-500" />
-                <img
-                  src="/varta-logo-mark.png"
-                  alt="VARTA 3D Emblem"
-                  className="relative h-20 sm:h-28 lg:h-32 w-auto object-contain drop-shadow-[0_16px_35px_rgba(0,0,0,0.25)] dark:drop-shadow-[0_16px_35px_rgba(0,0,0,0.9)] hover:scale-105 transition-transform duration-300 select-none"
-                />
+          {/* Right Script Style Callout matching reference image */}
+          <div className="relative text-right select-none">
+            {/* Mobile Script Callout: "Real Stories Real People Real India" */}
+            <div className="block lg:hidden">
+              <span
+                className="italic font-bold text-slate-900 text-xs sm:text-sm leading-tight block drop-shadow-2xs"
+                style={{
+                  fontFamily: 'Georgia, Cambria, "Times New Roman", serif',
+                  letterSpacing: '-0.01em',
+                }}
+              >
+                Real Stories
+                <br />
+                Real People
+                <br />
+                Real India
+              </span>
+              <div className="flex justify-end items-center gap-1 mt-0.5">
+                <span className="w-4 h-[2px] bg-[#FF9933] rounded-full inline-block"></span>
+                <span className="w-4 h-[2px] bg-[#00A844] rounded-full inline-block"></span>
               </div>
             </div>
 
-            <h1 className="text-4xl sm:text-5xl lg:text-[62px] font-black text-slate-900 dark:text-white tracking-tight leading-[1.08]">
+            {/* Desktop Script Callout */}
+            <div className="hidden lg:block">
+              <span
+                className="italic font-bold text-slate-800 text-lg lg:text-xl leading-tight block"
+                style={{
+                  fontFamily: 'Georgia, Cambria, "Times New Roman", serif',
+                  letterSpacing: '-0.01em',
+                }}
+              >
+                Real Stories
+                <br />
+                Real People
+                <br />
+                Real India
+              </span>
+              <svg
+                className="w-20 h-3 text-[#FF9933] ml-auto mt-1"
+                viewBox="0 0 100 20"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="3.5"
+              >
+                <path d="M 5,14 Q 50,22 95,6" strokeLinecap="round" />
+              </svg>
+            </div>
+          </div>
+        </header>
+
+        {/* Center Grid */}
+        <div className="w-full grid grid-cols-1 lg:grid-cols-12 gap-5 sm:gap-8 lg:gap-10 items-center my-auto py-2 sm:py-6 lg:py-8">
+          {/* LEFT / TOP HERO SECTION */}
+          <div className="lg:col-span-7 flex flex-col items-start justify-center pr-0 lg:pr-4 max-w-[62%] sm:max-w-none">
+            {/* Main Headline */}
+            <h1 className="text-3xl sm:text-5xl lg:text-[62px] font-black text-[#0B1422] tracking-tight leading-[1.05] drop-shadow-2xs">
               India&apos;s
               <br />
-              <span className="text-[#FF7A00]">Voice</span>,{' '}
-              <span className="text-[#00C853]">Together</span>
+              <span className="text-[#FF5722]">Voice</span>,
+              <br />
+              <span className="text-[#00A844]">Together</span>
             </h1>
 
-            <p className="mt-4 text-base sm:text-lg text-slate-600 dark:text-slate-300 font-normal tracking-wide">
-              Share. Discuss. Explore. Belong.
+            {/* Subtitle */}
+            <p className="mt-1.5 sm:mt-4 text-xs sm:text-base lg:text-lg text-slate-800 font-bold sm:font-semibold leading-tight sm:leading-relaxed">
+              Different people. One platform. A stronger India.
             </p>
 
-            {/* Feature Value Badges (exact match from screenshot 1) */}
-            <div className="mt-12 sm:mt-16 flex flex-col gap-5 sm:gap-6">
-              {/* Badge 1: Real People Real Conversations */}
-              <div className="flex items-center gap-4 group">
-                <div className="w-12 h-12 rounded-full bg-white dark:bg-[#0E2838]/80 border border-sky-200 dark:border-[#0284C7]/40 flex items-center justify-center text-[#0284C7] dark:text-[#38BDF8] shadow-md shadow-sky-500/10 dark:shadow-[#0284C7]/20 group-hover:scale-105 transition-transform shrink-0">
-                  <Users size={22} className="stroke-[2.2]" />
+            {/* Desktop-Only Community Stack */}
+            <div className="hidden lg:flex mt-5 items-center gap-3.5 bg-white/95 backdrop-blur-md px-4 py-2.5 rounded-full border border-white/90 shadow-[0_6px_25px_rgba(0,0,0,0.06)] hover:shadow-md transition">
+              <div className="flex -space-x-2.5 overflow-hidden shrink-0">
+                <img
+                  className="inline-block h-8 w-8 sm:h-9 sm:w-9 rounded-full ring-2 ring-white object-cover shadow-xs"
+                  src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&h=100&fit=crop&crop=faces"
+                  alt="Citizen Priya"
+                />
+                <img
+                  className="inline-block h-8 w-8 sm:h-9 sm:w-9 rounded-full ring-2 ring-white object-cover shadow-xs"
+                  src="https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100&h=100&fit=crop&crop=faces"
+                  alt="Citizen Aarav"
+                />
+                <img
+                  className="inline-block h-8 w-8 sm:h-9 sm:w-9 rounded-full ring-2 ring-white object-cover shadow-xs"
+                  src="https://images.unsplash.com/photo-1517841905240-472988babdf9?w=100&h=100&fit=crop&crop=faces"
+                  alt="Citizen Ananya"
+                />
+                <img
+                  className="inline-block h-8 w-8 sm:h-9 sm:w-9 rounded-full ring-2 ring-white object-cover shadow-xs"
+                  src="https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=100&h=100&fit=crop&crop=faces"
+                  alt="Citizen Rohan"
+                />
+              </div>
+              <div className="flex flex-col">
+                <span className="text-xs sm:text-sm font-black text-[#0B1422] leading-tight">
+                  Join thousands of voices across India
+                </span>
+                <span className="text-[11px] font-semibold text-slate-500 mt-0.5 flex items-center gap-1">
+                  <Flame size={12} className="text-[#FF5722]" />
+                  Sharing live thoughts, news & discourse
+                </span>
+              </div>
+            </div>
+
+            {/* Desktop-Only Live Sample Tweet Card */}
+            <div className="hidden lg:block mt-5 w-full max-w-[530px] bg-white/95 backdrop-blur-xl rounded-3xl p-5 border border-white/90 shadow-[0_12px_35px_rgba(0,0,0,0.08)] hover:shadow-[0_16px_45px_rgba(0,0,0,0.12)] transition-all duration-300">
+              <div className="flex items-start justify-between">
+                <div className="flex items-center gap-3">
+                  <img
+                    src="https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100&h=100&fit=crop&crop=faces"
+                    alt="Aarav Sharma"
+                    className="w-10 h-10 rounded-full object-cover ring-2 ring-[#0284C7]/20 shrink-0"
+                  />
+                  <div className="flex flex-col">
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <span className="font-extrabold text-sm text-[#0B1422]">
+                        Aarav Sharma
+                      </span>
+                      <BadgeCheck size={16} className="text-[#0284C7] fill-[#0284C7] text-white shrink-0" />
+                      <span className="text-xs text-slate-400 font-medium">@aarav_sharma</span>
+                      <span className="text-slate-300 text-xs">·</span>
+                      <span className="text-xs text-slate-400 font-medium">2h</span>
+                    </div>
+                    <span className="text-[11px] text-[#FF5722] font-bold flex items-center gap-1">
+                      Trending in India · Tech & Innovation 🚀
+                    </span>
+                  </div>
                 </div>
-                <div className="flex flex-col">
-                  <span className="text-slate-900 dark:text-white font-bold text-sm sm:text-base leading-tight">
-                    Real People
-                  </span>
-                  <span className="text-slate-500 dark:text-slate-400 text-xs sm:text-sm font-medium mt-0.5">
-                    Real Conversations
-                  </span>
+
+                <button
+                  type="button"
+                  className="text-slate-400 hover:text-slate-700 p-1 rounded-full transition"
+                  aria-label="More options"
+                >
+                  <MoreHorizontal size={17} />
+                </button>
+              </div>
+
+              <p className="mt-3 text-xs sm:text-sm text-slate-800 font-medium leading-relaxed">
+                Varanasi sunrise hits differently when you realize how ancient yet forward-thinking this nation is. India isn&apos;t just watching the future unfold, we&apos;re actively building it from local hubs to global stages! 🇮🇳✨
+              </p>
+
+              <div className="mt-2.5 flex items-center gap-2 flex-wrap text-xs font-bold text-[#0284C7]">
+                <span className="hover:underline cursor-pointer">#VartaSabki</span>
+                <span className="hover:underline cursor-pointer">#NewIndia</span>
+                <span className="hover:underline cursor-pointer">#TechBharat</span>
+                <span className="hover:underline cursor-pointer">#VaranasiGhats</span>
+              </div>
+
+              <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500 font-semibold select-none">
+                <button
+                  type="button"
+                  className="flex items-center gap-1.5 hover:text-[#0284C7] transition group"
+                  title="Reply"
+                >
+                  <div className="p-1.5 rounded-full group-hover:bg-sky-50 transition">
+                    <MessageCircle size={15} />
+                  </div>
+                  <span>348</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleToggleRepost}
+                  className={`flex items-center gap-1.5 transition group ${
+                    reposted ? 'text-[#00A844]' : 'hover:text-[#00A844]'
+                  }`}
+                  title="Repost"
+                >
+                  <div className="p-1.5 rounded-full group-hover:bg-emerald-50 transition">
+                    <Repeat2 size={16} />
+                  </div>
+                  <span>{repostCount.toLocaleString()}</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleToggleLike}
+                  className={`flex items-center gap-1.5 transition group ${
+                    liked ? 'text-rose-600' : 'hover:text-rose-600'
+                  }`}
+                  title="Like"
+                >
+                  <div className="p-1.5 rounded-full group-hover:bg-rose-50 transition">
+                    <Heart
+                      size={15}
+                      className={liked ? 'fill-rose-600 text-rose-600' : ''}
+                    />
+                  </div>
+                  <span>{likeCount.toLocaleString()}</span>
+                </button>
+
+                <div className="flex items-center gap-1.5 text-slate-400" title="Views">
+                  <BarChart2 size={15} />
+                  <span>54.8K</span>
+                </div>
+
+                <button
+                  type="button"
+                  className="hover:text-[#0284C7] p-1.5 rounded-full hover:bg-sky-50 transition"
+                  title="Bookmark"
+                >
+                  <Bookmark size={15} />
+                </button>
+              </div>
+            </div>
+
+            {/* Desktop-Only 3 Compact Value Feature Badges */}
+            <div className="hidden lg:grid mt-4 grid-cols-3 gap-2.5 w-full max-w-[530px]">
+              <div className="flex items-center gap-2.5 bg-white/90 backdrop-blur-md rounded-2xl p-2 px-3 border border-white/80 shadow-xs">
+                <div className="w-8 h-8 rounded-full border border-sky-400 bg-sky-50 flex items-center justify-center text-[#0284C7] shrink-0">
+                  <MessageSquare size={15} />
+                </div>
+                <div className="flex flex-col leading-tight">
+                  <span className="text-[#0B1422] font-black text-xs">Real People</span>
+                  <span className="text-slate-500 text-[10px]">Real Chats</span>
                 </div>
               </div>
 
-              {/* Badge 2: From Your City to the Whole India */}
-              <div className="flex items-center gap-4 group">
-                <div className="w-12 h-12 rounded-full bg-white dark:bg-[#0E2838]/80 border border-sky-200 dark:border-[#0284C7]/40 flex items-center justify-center text-[#0284C7] dark:text-[#38BDF8] shadow-md shadow-sky-500/10 dark:shadow-[#0284C7]/20 group-hover:scale-105 transition-transform shrink-0">
-                  <Compass size={22} className="stroke-[2.2]" />
+              <div className="flex items-center gap-2.5 bg-white/90 backdrop-blur-md rounded-2xl p-2 px-3 border border-white/80 shadow-xs">
+                <div className="w-8 h-8 rounded-full border border-rose-400 bg-rose-50 flex items-center justify-center text-[#EF4444] shrink-0">
+                  <MapPin size={15} />
                 </div>
-                <div className="flex flex-col">
-                  <span className="text-slate-900 dark:text-white font-bold text-sm sm:text-base leading-tight">
-                    From Your City
-                  </span>
-                  <span className="text-slate-500 dark:text-slate-400 text-xs sm:text-sm font-medium mt-0.5">
-                    to the Whole India
-                  </span>
+                <div className="flex flex-col leading-tight">
+                  <span className="text-[#0B1422] font-black text-xs">Your City</span>
+                  <span className="text-slate-500 text-[10px]">All of India</span>
                 </div>
               </div>
 
-              {/* Badge 3: A Safer, More Open Community */}
-              <div className="flex items-center gap-4 group">
-                <div className="w-12 h-12 rounded-full bg-white dark:bg-[#0E2838]/80 border border-sky-200 dark:border-[#0284C7]/40 flex items-center justify-center text-[#0284C7] dark:text-[#38BDF8] shadow-md shadow-sky-500/10 dark:shadow-[#0284C7]/20 group-hover:scale-105 transition-transform shrink-0">
-                  <ShieldCheck size={22} className="stroke-[2.2]" />
+              <div className="flex items-center gap-2.5 bg-white/90 backdrop-blur-md rounded-2xl p-2 px-3 border border-white/80 shadow-xs">
+                <div className="w-8 h-8 rounded-full border border-emerald-400 bg-emerald-50 flex items-center justify-center text-[#10B981] shrink-0">
+                  <ShieldCheck size={15} />
                 </div>
-                <div className="flex flex-col">
-                  <span className="text-slate-900 dark:text-white font-bold text-sm sm:text-base leading-tight">
-                    A Safer, More
-                  </span>
-                  <span className="text-slate-500 dark:text-slate-400 text-xs sm:text-sm font-medium mt-0.5">
-                    Open Community
-                  </span>
+                <div className="flex flex-col leading-tight">
+                  <span className="text-[#0B1422] font-black text-xs">Safer Space</span>
+                  <span className="text-slate-500 text-[10px]">Civil & Open</span>
                 </div>
               </div>
             </div>
           </div>
 
-          {/* RIGHT COLUMN: Floating Glassmorphic Login Card */}
-          <div className="lg:col-span-5 flex justify-center lg:justify-end">
-            <div className="w-full max-w-[430px] rounded-[28px] bg-white/95 dark:bg-[#0A1220]/85 backdrop-blur-xl border border-slate-200/90 dark:border-white/10 p-7 sm:p-9 shadow-2xl shadow-slate-900/10 dark:shadow-black/80 flex flex-col gap-5">
-              {/* Card Title */}
+          {/* RIGHT / CENTER FLOATING CARD (Matches Mobile Screenshot Exactly) */}
+          <div className="lg:col-span-5 flex justify-center lg:justify-end w-full">
+            <div className="w-full max-w-[390px] sm:max-w-[430px] rounded-[28px] sm:rounded-[32px] bg-white p-5 sm:p-8 shadow-[0_20px_60px_-15px_rgba(0,0,0,0.18)] border border-slate-100 flex flex-col gap-4">
+              {/* Card Header Title */}
               <div className="flex flex-col">
-                <h2 className="text-2xl sm:text-[26px] font-black text-slate-900 dark:text-white tracking-tight">
+                <h2 className="text-2xl sm:text-[28px] font-black text-[#0B1422] tracking-tight">
                   Welcome Back
                 </h2>
-                <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 mt-1">
+                <p className="text-xs sm:text-sm text-slate-500 font-medium mt-0.5 sm:mt-1">
                   Sign in to your VARTA account
                 </p>
               </div>
 
               {/* Error Feedback Alert */}
               {errorMessage && (
-                <div className="p-3.5 bg-red-500/15 border border-red-500/30 rounded-xl flex flex-col gap-1.5 text-xs text-red-300">
+                <div className="p-3 bg-rose-50 border border-rose-200 rounded-2xl flex flex-col gap-1 text-xs text-rose-700 animate-in fade-in duration-200">
                   <div className="flex items-center gap-2">
-                    <AlertCircle size={16} className="shrink-0 text-red-400" />
-                    <span>{errorMessage}</span>
+                    <AlertCircle size={15} className="shrink-0 text-rose-600" />
+                    <span className="font-semibold">{errorMessage}</span>
                   </div>
                   {(errorMessage.toLowerCase().includes('not active') ||
                     errorMessage.toLowerCase().includes('activation link')) && (
@@ -231,24 +455,24 @@ export default function LoginPage() {
                       type="button"
                       onClick={handleResend}
                       disabled={isResending}
-                      className="self-start text-[#38BDF8] hover:underline font-bold text-xs mt-1"
+                      className="self-start text-[#0284C7] hover:underline font-bold text-xs mt-1"
                     >
                       {isResending ? 'Dispatching activation email...' : 'Resend Activation Email'}
                     </button>
                   )}
                   {resendSuccess && (
-                    <span className="text-[#00C853] font-semibold text-xs mt-0.5">
+                    <span className="text-[#00A844] font-semibold text-xs mt-0.5">
                       {resendSuccess}
                     </span>
                   )}
                 </div>
               )}
 
-              {/* Login Form */}
-              <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-                {/* Identifier Input */}
-                <div className="flex flex-col gap-1.5">
-                  <div className="relative flex items-center bg-slate-50 dark:bg-[#070D18]/90 border border-slate-200 dark:border-slate-700/60 focus-within:border-[#FF9933] dark:focus-within:border-[#0284C7] focus-within:ring-2 focus-within:ring-[#FF9933]/20 dark:focus-within:ring-[#0284C7]/30 rounded-xl px-4 py-3.5 transition shadow-xs">
+              {/* Sign In Form */}
+              <form onSubmit={handleSubmit} className="flex flex-col gap-3">
+                {/* Username or Email Input */}
+                <div className="flex flex-col gap-1">
+                  <div className="relative flex items-center bg-[#F8FAFC] border border-[#E2E8F0] focus-within:border-[#FF5722] focus-within:bg-white focus-within:ring-2 focus-within:ring-[#FF5722]/15 rounded-2xl px-3.5 sm:px-4 py-3 sm:py-3.5 transition shadow-2xs">
                     <Mail size={18} className="text-slate-400 shrink-0 mr-3" />
                     <input
                       type="text"
@@ -257,14 +481,14 @@ export default function LoginPage() {
                       placeholder="Username or Email"
                       autoComplete="username"
                       suppressHydrationWarning
-                      className="bg-transparent text-sm text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 outline-none w-full font-medium"
+                      className="bg-transparent text-sm text-[#0B1422] placeholder-slate-400 outline-none w-full font-medium"
                     />
                   </div>
                 </div>
 
                 {/* Password Input */}
-                <div className="flex flex-col gap-1.5">
-                  <div className="relative flex items-center bg-slate-50 dark:bg-[#070D18]/90 border border-slate-200 dark:border-slate-700/60 focus-within:border-[#FF9933] dark:focus-within:border-[#0284C7] focus-within:ring-2 focus-within:ring-[#FF9933]/20 dark:focus-within:ring-[#0284C7]/30 rounded-xl px-4 py-3.5 transition shadow-xs">
+                <div className="flex flex-col gap-1">
+                  <div className="relative flex items-center bg-[#F8FAFC] border border-[#E2E8F0] focus-within:border-[#FF5722] focus-within:bg-white focus-within:ring-2 focus-within:ring-[#FF5722]/15 rounded-2xl px-3.5 sm:px-4 py-3 sm:py-3.5 transition shadow-2xs">
                     <Lock size={18} className="text-slate-400 shrink-0 mr-3" />
                     <input
                       type={showPassword ? 'text' : 'password'}
@@ -273,54 +497,57 @@ export default function LoginPage() {
                       placeholder="Password"
                       autoComplete="current-password"
                       suppressHydrationWarning
-                      className="bg-transparent text-sm text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 outline-none w-full font-medium pr-2"
+                      className="bg-transparent text-sm text-[#0B1422] placeholder-slate-400 outline-none w-full font-medium pr-2"
                     />
                     <button
                       type="button"
                       onClick={() => setShowPassword(!showPassword)}
                       aria-label={showPassword ? 'Hide password' : 'Show password'}
-                      className="text-slate-400 hover:text-slate-700 dark:hover:text-white transition shrink-0"
+                      className="text-slate-400 hover:text-slate-600 transition shrink-0"
                     >
                       {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
                     </button>
                   </div>
 
                   {/* Forgot Password Link */}
-                  <div className="flex justify-end mt-1">
+                  <div className="flex justify-end mt-0.5">
                     <Link
                       href="/forgot-password"
-                      className="text-xs text-[#0284C7] dark:text-[#0EA5E9] hover:underline font-semibold"
+                      className="text-xs text-[#0284C7] hover:underline font-semibold"
                     >
                       Forgot password?
                     </Link>
                   </div>
                 </div>
 
-                {/* Main Submit Saffron Button */}
+                {/* Saffron Action Button: Sign In */}
                 <button
                   type="submit"
                   disabled={isLoading}
-                  className="w-full py-3.5 rounded-xl bg-gradient-to-r from-[#FF7A00] to-[#FF9933] hover:from-[#E66E00] hover:to-[#E68525] text-white font-bold text-sm sm:text-base shadow-lg shadow-orange-500/25 active:scale-[0.98] transition flex items-center justify-center gap-2 mt-1 cursor-pointer disabled:opacity-60"
+                  style={{ color: '#FFFFFF' }}
+                  className="w-full py-3 sm:py-3.5 rounded-2xl bg-[#FF5722] hover:bg-[#E64A19] active:scale-[0.99] text-white text-force-white font-extrabold text-sm sm:text-base shadow-lg shadow-orange-500/30 transition flex items-center justify-center gap-2 mt-1 cursor-pointer disabled:opacity-60"
                 >
                   {isLoading ? (
-                    <Loader2 size={18} className="animate-spin" />
+                    <Loader2 size={18} className="animate-spin text-white" />
                   ) : (
-                    'Sign In'
+                    <span style={{ color: '#FFFFFF' }} className="text-white text-force-white font-extrabold">
+                      Sign In
+                    </span>
                   )}
                 </button>
               </form>
 
               {/* OR CONTINUE WITH Divider */}
-              <div className="flex items-center my-1">
-                <div className="flex-1 h-[1px] bg-slate-200 dark:bg-slate-800" />
-                <span className="px-3 text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+              <div className="flex items-center my-0.5">
+                <div className="flex-1 h-[1px] bg-slate-200" />
+                <span className="px-3 text-[10px] font-black text-slate-500 uppercase tracking-widest">
                   OR CONTINUE WITH
                 </span>
-                <div className="flex-1 h-[1px] bg-slate-200 dark:bg-slate-800" />
+                <div className="flex-1 h-[1px] bg-slate-200" />
               </div>
 
-              {/* Social Login 3-Icon Row */}
-              <div className="grid grid-cols-3 gap-3">
+              {/* 3 Alternate Auth Option Buttons */}
+              <div className="grid grid-cols-3 gap-2.5 sm:gap-3">
                 <button
                   type="button"
                   onClick={() =>
@@ -328,7 +555,8 @@ export default function LoginPage() {
                       'Google SSO simulated for layout demo. Use email/password or demo login below.'
                     )
                   }
-                  className="h-12 rounded-xl bg-slate-50 hover:bg-slate-100 dark:bg-[#070D18]/90 dark:hover:bg-slate-800/60 border border-slate-200 dark:border-slate-700/60 flex items-center justify-center transition active:scale-95 shadow-xs"
+                  className="h-11 sm:h-12 rounded-2xl bg-white hover:bg-slate-50 border border-slate-200/90 flex items-center justify-center transition active:scale-95 shadow-2xs"
+                  title="Sign in with Google"
                 >
                   <GoogleIcon className="w-5 h-5" />
                 </button>
@@ -340,7 +568,8 @@ export default function LoginPage() {
                       'Apple SSO simulated for layout demo. Use email/password or demo login below.'
                     )
                   }
-                  className="h-12 rounded-xl bg-slate-50 hover:bg-slate-100 dark:bg-[#070D18]/90 dark:hover:bg-slate-800/60 border border-slate-200 dark:border-slate-700/60 flex items-center justify-center text-slate-900 dark:text-white transition active:scale-95 shadow-xs"
+                  className="h-11 sm:h-12 rounded-2xl bg-white hover:bg-slate-50 border border-slate-200/90 flex items-center justify-center text-black transition active:scale-95 shadow-2xs"
+                  title="Sign in with Apple"
                 >
                   <AppleIcon className="w-5 h-5" />
                 </button>
@@ -352,42 +581,43 @@ export default function LoginPage() {
                       'Phone OTP simulated for layout demo. Use email/password or demo login below.'
                     )
                   }
-                  className="h-12 rounded-xl bg-slate-50 hover:bg-slate-100 dark:bg-[#070D18]/90 dark:hover:bg-slate-800/60 border border-slate-200 dark:border-slate-700/60 flex items-center justify-center text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white transition active:scale-95 shadow-xs"
+                  className="h-11 sm:h-12 rounded-2xl bg-white hover:bg-slate-50 border border-slate-200/90 flex items-center justify-center text-slate-700 hover:text-black transition active:scale-95 shadow-2xs"
+                  title="Sign in with Phone / OTP"
                 >
                   <Smartphone size={20} />
                 </button>
               </div>
 
-              {/* One-Click Quick Demo Login */}
-              <div className="pt-2 border-t border-slate-200 dark:border-slate-800/80 flex flex-col gap-1.5">
-                <span className="text-[10px] uppercase font-bold tracking-wider text-slate-500 dark:text-slate-400 flex items-center gap-1">
-                  <Sparkles size={11} className="text-[#FF9933]" />
+              {/* Quick Demo One-Click Login */}
+              <div className="pt-2 border-t border-slate-100 flex flex-col gap-1">
+                <span className="text-[10px] uppercase font-bold tracking-wider text-slate-500 flex items-center gap-1">
+                  <Sparkles size={11} className="text-[#FF5722]" />
                   Quick Demo Login (One Click)
                 </span>
                 <div className="grid grid-cols-2 gap-2">
                   <button
                     type="button"
                     onClick={() => handleDemoLogin('aarav_sharma')}
-                    className="px-2.5 py-1.5 rounded-lg text-xs font-semibold border border-slate-200 dark:border-slate-700/60 bg-slate-100 hover:bg-slate-200 dark:bg-[#070D18]/80 dark:hover:bg-slate-800/60 text-slate-800 dark:text-slate-300 text-left truncate transition shadow-xs"
+                    className="px-2 py-1.5 rounded-xl text-xs font-semibold border border-slate-200 bg-slate-50 hover:bg-slate-100 text-slate-800 text-left truncate transition shadow-2xs"
                   >
                     🧑‍💻 @aarav_sharma
                   </button>
                   <button
                     type="button"
                     onClick={() => handleDemoLogin('varta_official')}
-                    className="px-2.5 py-1.5 rounded-lg text-xs font-semibold border border-orange-200 dark:border-slate-700/60 bg-orange-50 hover:bg-orange-100 dark:bg-[#070D18]/80 dark:hover:bg-slate-800/60 text-orange-950 dark:text-[#FF9933] text-left truncate transition shadow-xs"
+                    className="px-2 py-1.5 rounded-xl text-xs font-semibold border border-orange-200 bg-orange-50/80 hover:bg-orange-100 text-orange-950 text-left truncate transition shadow-2xs"
                   >
                     🛡️ @varta_official
                   </button>
                 </div>
               </div>
 
-              {/* Bottom Switch to Register */}
-              <p className="text-center text-xs sm:text-sm text-slate-600 dark:text-slate-400 mt-1">
+              {/* Card Footer: Don't have an account? Create Account */}
+              <p className="text-center text-xs sm:text-sm text-slate-600 mt-0.5">
                 Don&apos;t have an account?{' '}
                 <Link
                   href="/register"
-                  className="text-[#0284C7] dark:text-[#0EA5E9] hover:underline font-bold"
+                  className="text-[#0284C7] hover:underline font-bold"
                 >
                   Create Account
                 </Link>
@@ -396,17 +626,17 @@ export default function LoginPage() {
           </div>
         </div>
 
-        {/* Bottom Subtle Footer */}
-        <footer className="w-full flex items-center justify-between text-xs text-slate-500 py-2">
+        {/* Bottom Minimal Footer */}
+        <footer className="w-full flex items-center justify-between text-xs text-slate-600 font-medium py-2">
           <span>© 2026 VARTA — Baat Sabki</span>
           <div className="flex items-center gap-4">
-            <Link href="/terms" className="hover:text-slate-800 dark:hover:text-slate-300 transition">
+            <Link href="/terms" className="hover:text-slate-900 transition">
               Terms
             </Link>
-            <Link href="/privacy" className="hover:text-slate-800 dark:hover:text-slate-300 transition">
+            <Link href="/privacy" className="hover:text-slate-900 transition">
               Privacy
             </Link>
-            <Link href="/grievance" className="hover:text-slate-800 dark:hover:text-slate-300 transition">
+            <Link href="/grievance" className="hover:text-slate-900 transition">
               Grievance
             </Link>
           </div>

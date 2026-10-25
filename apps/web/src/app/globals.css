@@ -82,6 +82,30 @@
   border-color: var(--border);
 }
 
+/* Remove browser blue autofill background */
+input:-webkit-autofill,
+input:-webkit-autofill:hover, 
+input:-webkit-autofill:focus, 
+input:-webkit-autofill:active,
+textarea:-webkit-autofill,
+select:-webkit-autofill {
+  -webkit-box-shadow: 0 0 0 1000px #FFFFFF inset !important;
+  box-shadow: 0 0 0 1000px #FFFFFF inset !important;
+  -webkit-text-fill-color: #0B1422 !important;
+  caret-color: #0B1422 !important;
+  transition: background-color 50000s ease-in-out 0s !important;
+}
+
+.dark input:-webkit-autofill,
+.dark input:-webkit-autofill:hover, 
+.dark input:-webkit-autofill:focus, 
+.dark input:-webkit-autofill:active {
+  -webkit-box-shadow: 0 0 0 1000px #070D18 inset !important;
+  box-shadow: 0 0 0 1000px #070D18 inset !important;
+  -webkit-text-fill-color: #FFFFFF !important;
+  caret-color: #FFFFFF !important;
+}
+
 body {
   background-color: var(--background);
   color: var(--foreground);
@@ -155,6 +179,18 @@ html.light .text-white {
 }
 
 /* 1. Preserve crisp white text on ALL solid action buttons, links & dark pills/overlays */
+html.light button.bg-\[\#FF5722\],
+html.light button.bg-\[\#FF5722\] *,
+html.light a.bg-\[\#FF5722\],
+html.light a.bg-\[\#FF5722\] *,
+html.light .bg-\[\#FF5722\],
+html.light .bg-\[\#FF5722\] *,
+html.light button.bg-\[\#E64A19\],
+html.light button.bg-\[\#E64A19\] *,
+html.light a.bg-\[\#E64A19\],
+html.light a.bg-\[\#E64A19\] *,
+html.light .bg-\[\#E64A19\],
+html.light .bg-\[\#E64A19\] *,
 html.light button.bg-\[\#FF9933\],
 html.light button.bg-\[\#FF9933\] *,
 html.light a.bg-\[\#FF9933\],
@@ -175,12 +211,68 @@ html.light .bg-\[\#0F172A\],
 html.light .bg-\[\#0F172A\] *,
 html.light button.bg-\[\#0F172A\],
 html.light button.bg-\[\#0F172A\] *,
-html.light [class*="bg-black/"],
-html.light [class*="bg-black/"] *,
-html.light [class*="bg-black"],
-html.light [class*="bg-black"] *,
-html.light .bg-black,
-html.light .bg-black * {
+html.light [class*="bg-black/"]:not([class*="fixed"]):not([class*="inset-0"]),
+html.light [class*="bg-black/"]:not([class*="fixed"]):not([class*="inset-0"]) *,
+html.light [class*="bg-black"]:not([class*="fixed"]):not([class*="inset-0"]),
+html.light [class*="bg-black"]:not([class*="fixed"]):not([class*="inset-0"]) *,
+html.light .bg-black:not([class*="fixed"]):not([class*="inset-0"]),
+html.light .bg-black:not([class*="fixed"]):not([class*="inset-0"]) *,
+html.light .text-force-white,
+html.light .text-force-white *,
+.text-force-white,
+.text-force-white * {
+  color: #FFFFFF !important;
+}
+
+/* Active Call & Voice/Video Conference Modal High-Contrast Styling */
+html.light .varta-call-dialog {
+  background-color: #FFFFFF !important;
+  border-color: #E2E8F0 !important;
+  color: #0F172A !important;
+}
+
+html.light .varta-call-dialog h3,
+html.light .varta-call-dialog .call-title {
+  color: #0F172A !important;
+}
+
+html.light .varta-call-dialog p,
+html.light .varta-call-dialog .call-subtitle {
+  color: #64748B !important;
+}
+
+html.light .varta-call-dialog .call-group-label {
+  color: #EA580C !important;
+}
+
+html.light .varta-call-dialog .call-badge {
+  background-color: #F1F5F9 !important;
+  border-color: #CBD5E1 !important;
+  color: #1E293B !important;
+}
+
+html.light .varta-call-dialog .call-badge span {
+  color: #1E293B !important;
+}
+
+html.light .varta-call-dialog .call-control-btn {
+  background-color: #F1F5F9 !important;
+  border-color: #CBD5E1 !important;
+  color: #334155 !important;
+}
+
+html.light .varta-call-dialog .call-control-btn:hover {
+  background-color: #E2E8F0 !important;
+  color: #0F172A !important;
+}
+
+html.light .varta-call-dialog .call-control-btn svg {
+  color: #334155 !important;
+}
+
+html.light .varta-call-dialog .call-btn-danger,
+html.light .varta-call-dialog .call-btn-danger * {
+  background-color: #DC2626 !important;
   color: #FFFFFF !important;
 }
 

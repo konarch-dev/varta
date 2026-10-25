@@ -88,9 +88,9 @@ function SettingsContent() {
   };
 
   // Theme State
-  const [currentTheme, setCurrentTheme] = useState<'dark' | 'dim' | 'light'>('dark');
+  const [currentTheme, setCurrentTheme] = useState<'dark' | 'dim' | 'light'>('light');
   useEffect(() => {
-    const savedTheme = (localStorage.getItem('varta_theme') as 'dark' | 'dim' | 'light') || 'dark';
+    const savedTheme = (localStorage.getItem('varta_theme') as 'dark' | 'dim' | 'light') || 'light';
     setCurrentTheme(savedTheme);
     applyThemeClass(savedTheme);
   }, []);

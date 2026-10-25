@@ -7,6 +7,11 @@
     "apps/*"
   ],
   "scripts": {
+    "build:packages": "npm run db:generate && npm run build -w packages/shared && npm run build -w packages/database",
+    "predev": "npm run build:packages",
+    "predev:api": "npm run build:packages",
+    "predev:web": "npm run build -w packages/shared",
+    "predev:worker": "npm run build:packages",
     "dev": "concurrently -n \"API,WEB,WORKER\" -c \"blue,green,magenta\" \"npm run dev -w apps/api\" \"npm run dev -w apps/web\" \"npm run dev -w apps/worker\"",
     "dev:api": "npm run dev -w apps/api",
     "dev:web": "npm run dev -w apps/web",
