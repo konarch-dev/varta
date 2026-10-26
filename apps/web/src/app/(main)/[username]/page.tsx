@@ -267,14 +267,23 @@ function UserProfileContent() {
   };
 
   const handleStartDM = async () => {
+    if (!currentUser) {
+      router.push(`/login?returnUrl=/${username}`);
+      return;
+    }
     try {
-      const res = await apiRequest('/messages/conversations', {
+      const res = await apiRequest<{ conversationId: string }>('/messages/conversations', {
         method: 'POST',
         body: JSON.stringify({ username }),
       });
-      router.push(`/messages?id=${res.conversationId}`);
-    } catch (err) {
-      console.error(err);
+      if (res?.conversationId) {
+        router.push(`/messages?id=${res.conversationId}`);
+      }
+    } catch (err: any) {
+      console.error('Failed to start DM conversation:', err);
+      if (err?.status === 401) {
+        router.push(`/login?returnUrl=/${username}`);
+      }
     }
   };
 

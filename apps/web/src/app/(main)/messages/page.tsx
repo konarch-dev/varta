@@ -126,8 +126,40 @@ const playRingbackPulse = (ctx: AudioContext) => {
   }
 };
 
+// Play incoming telephone ring cycle (dual tone 659Hz + 880Hz)
+const playIncomingRingPulse = (ctx: AudioContext) => {
+  try {
+    const now = ctx.currentTime;
+    [659.25, 880.0].forEach((freq) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(freq, now);
+      gain.gain.setValueAtTime(0.06, now);
+      gain.gain.setValueAtTime(0.06, now + 0.8);
+      gain.gain.exponentialRampToValueAtTime(0.0001, now + 1.1);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(now);
+      osc.stop(now + 1.1);
+    });
+  } catch {
+    // safely ignore
+  }
+};
+
+// WebRTC ICE servers configuration
+const RTC_CONFIG: RTCConfiguration = {
+  iceServers: [
+    { urls: 'stun:stun.l.google.com:19302' },
+    { urls: 'stun:stun1.l.google.com:19302' },
+    { urls: 'stun:stun2.l.google.com:19302' },
+  ],
+};
+
 // Active Call State Interface
 interface CallState {
+  conversationId: string;
   type: 'audio' | 'video';
   target: {
     id: string;
@@ -167,21 +199,175 @@ function MessagesContent() {
   const [groupTitle, setGroupTitle] = useState('');
   const [selectedGroupUsers, setSelectedGroupUsers] = useState<UserSummary[]>([]);
 
-  // Active call state
+  // Active call state & reference
   const [activeCall, setActiveCall] = useState<CallState | null>(null);
+  const activeCallRef = useRef<CallState | null>(null);
+  useEffect(() => {
+    activeCallRef.current = activeCall;
+  }, [activeCall]);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // Call media & WebRTC / Audio analyzer refs
+  const [localStream, setLocalStream] = useState<MediaStream | null>(null);
+  const [remoteStream, setRemoteStream] = useState<MediaStream | null>(null);
   const localVideoRef = useRef<HTMLVideoElement>(null);
+  const remoteVideoRef = useRef<HTMLVideoElement>(null);
+  const remoteAudioRef = useRef<HTMLAudioElement>(null);
   const localStreamRef = useRef<MediaStream | null>(null);
+  const peerConnectionRef = useRef<RTCPeerConnection | null>(null);
+  const pendingIceCandidatesRef = useRef<RTCIceCandidateInit[]>([]);
   const audioContextRef = useRef<AudioContext | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
   const animFrameRef = useRef<number | null>(null);
   const ringToneIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const incomingToneIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const autoConnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Synchronize media streams with video and audio elements
+  useEffect(() => {
+    if (localVideoRef.current && localStream) {
+      localVideoRef.current.srcObject = localStream;
+    }
+  }, [localStream, activeCall?.isVideoOff, activeCall?.type]);
+
+  useEffect(() => {
+    if (remoteVideoRef.current && remoteStream) {
+      remoteVideoRef.current.srcObject = remoteStream;
+    }
+  }, [remoteStream, activeCall?.type]);
+
+  useEffect(() => {
+    if (remoteAudioRef.current && remoteStream) {
+      remoteAudioRef.current.srcObject = remoteStream;
+    }
+  }, [remoteStream]);
+
+  // Audio analyzer to visualize speaking wave activity
+  const setupAudioAnalyzer = (stream: MediaStream) => {
+    try {
+      const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+      if (!AudioCtx) return;
+      const ctx = new AudioCtx();
+      audioContextRef.current = ctx;
+      const source = ctx.createMediaStreamSource(stream);
+      const analyser = ctx.createAnalyser();
+      analyser.fftSize = 64;
+      source.connect(analyser);
+      analyserRef.current = analyser;
+
+      const dataArray = new Uint8Array(analyser.frequencyBinCount);
+      const updateLevel = () => {
+        if (!analyserRef.current) return;
+        analyserRef.current.getByteFrequencyData(dataArray);
+        let sum = 0;
+        for (let i = 0; i < dataArray.length; i++) {
+          sum += dataArray[i];
+        }
+        const avg = sum / dataArray.length;
+        setActiveCall((prev) => (prev ? { ...prev, audioLevel: avg } : null));
+        animFrameRef.current = requestAnimationFrame(updateLevel);
+      };
+      updateLevel();
+    } catch (e) {
+      console.warn('Audio analyzer init:', e);
+    }
+  };
+
+  const addStreamTracksToPeer = (pc: RTCPeerConnection, stream: MediaStream) => {
+    try {
+      const senders = pc.getSenders();
+      stream.getTracks().forEach((track) => {
+        if (!senders.some((s) => s.track === track)) {
+          pc.addTrack(track, stream);
+        }
+      });
+    } catch (e) {
+      console.warn('Track attach notice:', e);
+    }
+  };
+
+  const getOrCreatePeerConnection = (targetUserId?: string, conversationId?: string): RTCPeerConnection => {
+    if (peerConnectionRef.current && peerConnectionRef.current.signalingState !== 'closed') {
+      return peerConnectionRef.current;
+    }
+
+    const pc = new RTCPeerConnection(RTC_CONFIG);
+    peerConnectionRef.current = pc;
+
+    pc.onicecandidate = (event) => {
+      if (event.candidate) {
+        const socket = getSocket(token);
+        socket.emit('call:signal', {
+          targetUserId,
+          conversationId,
+          signal: { type: 'candidate', candidate: event.candidate },
+        });
+      }
+    };
+
+    pc.ontrack = (event) => {
+      if (event.streams && event.streams[0]) {
+        setRemoteStream(event.streams[0]);
+      }
+    };
+
+    pc.onconnectionstatechange = () => {
+      if (pc.connectionState === 'connected') {
+        setActiveCall((prev) => (prev ? { ...prev, status: 'connected' } : null));
+      }
+    };
+
+    if (localStreamRef.current) {
+      addStreamTracksToPeer(pc, localStreamRef.current);
+    }
+
+    return pc;
+  };
+
+  const stopMediaStream = () => {
+    if (localStreamRef.current) {
+      localStreamRef.current.getTracks().forEach((track) => {
+        try {
+          track.stop();
+        } catch {}
+      });
+      localStreamRef.current = null;
+    }
+    setLocalStream(null);
+    setRemoteStream(null);
+
+    if (peerConnectionRef.current) {
+      try {
+        peerConnectionRef.current.close();
+      } catch {}
+      peerConnectionRef.current = null;
+    }
+    pendingIceCandidatesRef.current = [];
+
+    if (animFrameRef.current) {
+      cancelAnimationFrame(animFrameRef.current);
+      animFrameRef.current = null;
+    }
+    if (audioContextRef.current) {
+      audioContextRef.current.close().catch(() => {});
+      audioContextRef.current = null;
+    }
+    if (autoConnectTimeoutRef.current) {
+      clearTimeout(autoConnectTimeoutRef.current);
+      autoConnectTimeoutRef.current = null;
+    }
+    if (ringToneIntervalRef.current) {
+      clearInterval(ringToneIntervalRef.current);
+      ringToneIntervalRef.current = null;
+    }
+    if (incomingToneIntervalRef.current) {
+      clearInterval(incomingToneIntervalRef.current);
+      incomingToneIntervalRef.current = null;
+    }
+  };
 
   // 1. Fetch Conversations
   const {
@@ -343,6 +529,7 @@ function MessagesContent() {
       if (data.caller.id === user?.id) return;
 
       setActiveCall({
+        conversationId: data.conversationId,
         type: data.type,
         target: {
           id: data.caller.id,
@@ -357,21 +544,122 @@ function MessagesContent() {
         isVideoOff: false,
         audioLevel: 0,
       });
-      playMessageChime();
+
+      // Play immediate ring pulse and repeating incoming tone
+      try {
+        const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+        if (AudioCtx) {
+          const ctx = new AudioCtx();
+          playIncomingRingPulse(ctx);
+          if (incomingToneIntervalRef.current) clearInterval(incomingToneIntervalRef.current);
+          incomingToneIntervalRef.current = setInterval(() => {
+            playIncomingRingPulse(ctx);
+          }, 2600);
+        }
+      } catch {
+        playMessageChime();
+      }
     };
 
     // Live Call Accepted by peer
-    const handleCallAccepted = () => {
+    const handleCallAccepted = async () => {
       if (autoConnectTimeoutRef.current) {
         clearTimeout(autoConnectTimeoutRef.current);
         autoConnectTimeoutRef.current = null;
       }
       playConnectChime();
       setActiveCall((prev) => (prev ? { ...prev, status: 'connected' } : null));
+
+      // As caller, initiate WebRTC offer
+      const call = activeCallRef.current;
+      if (call) {
+        try {
+          const pc = getOrCreatePeerConnection(call.target.id, call.conversationId);
+          const offer = await pc.createOffer({
+            offerToReceiveAudio: true,
+            offerToReceiveVideo: call.type === 'video',
+          });
+          await pc.setLocalDescription(offer);
+          socket.emit('call:signal', {
+            targetUserId: call.target.isGroup ? undefined : call.target.id,
+            conversationId: call.conversationId,
+            signal: { type: 'offer', sdp: offer },
+          });
+        } catch (err) {
+          console.warn('Initiate offer notice:', err);
+        }
+      }
+    };
+
+    // Live WebRTC Signaling (Offer / Answer / ICE Candidates)
+    const handleCallSignal = async (data: { signal: any; fromUserId: string; conversationId: string }) => {
+      try {
+        const { signal, fromUserId, conversationId } = data;
+        if (fromUserId === user?.id) return;
+
+        let pc = peerConnectionRef.current;
+        if (!pc) {
+          pc = getOrCreatePeerConnection(fromUserId, conversationId);
+        }
+
+        if (signal.type === 'offer') {
+          await pc.setRemoteDescription(new RTCSessionDescription(signal.sdp));
+
+          while (pendingIceCandidatesRef.current.length > 0) {
+            const cand = pendingIceCandidatesRef.current.shift()!;
+            try {
+              await pc.addIceCandidate(new RTCIceCandidate(cand));
+            } catch (e) {
+              console.warn('ICE buffer notice:', e);
+            }
+          }
+
+          if (localStreamRef.current) {
+            addStreamTracksToPeer(pc, localStreamRef.current);
+          }
+
+          const answer = await pc.createAnswer();
+          await pc.setLocalDescription(answer);
+
+          socket.emit('call:signal', {
+            targetUserId: fromUserId,
+            conversationId,
+            signal: { type: 'answer', sdp: answer },
+          });
+        } else if (signal.type === 'answer') {
+          if (pc.signalingState !== 'stable') {
+            await pc.setRemoteDescription(new RTCSessionDescription(signal.sdp));
+            while (pendingIceCandidatesRef.current.length > 0) {
+              const cand = pendingIceCandidatesRef.current.shift()!;
+              try {
+                await pc.addIceCandidate(new RTCIceCandidate(cand));
+              } catch (e) {
+                console.warn('ICE buffer notice:', e);
+              }
+            }
+          }
+        } else if (signal.type === 'candidate' && signal.candidate) {
+          if (pc.remoteDescription && pc.remoteDescription.type) {
+            try {
+              await pc.addIceCandidate(new RTCIceCandidate(signal.candidate));
+            } catch (e) {
+              console.warn('Add ICE notice:', e);
+            }
+          } else {
+            pendingIceCandidatesRef.current.push(signal.candidate);
+          }
+        }
+      } catch (err) {
+        console.warn('Signal handling notice:', err);
+      }
     };
 
     // Live Call Ended / Rejected
     const handleCallEnded = () => {
+      if (incomingToneIntervalRef.current) {
+        clearInterval(incomingToneIntervalRef.current);
+        incomingToneIntervalRef.current = null;
+      }
       playEndCallTone();
       stopMediaStream();
       setActiveCall(null);
@@ -384,6 +672,7 @@ function MessagesContent() {
     socket.on('conversation:read', handleConversationRead);
     socket.on('call:incoming', handleIncomingCall);
     socket.on('call:accepted', handleCallAccepted);
+    socket.on('call:signal', handleCallSignal);
     socket.on('call:rejected', handleCallEnded);
     socket.on('call:ended', handleCallEnded);
 
@@ -397,6 +686,7 @@ function MessagesContent() {
       socket.off('conversation:read', handleConversationRead);
       socket.off('call:incoming', handleIncomingCall);
       socket.off('call:accepted', handleCallAccepted);
+      socket.off('call:signal', handleCallSignal);
       socket.off('call:rejected', handleCallEnded);
       socket.off('call:ended', handleCallEnded);
     };
@@ -626,7 +916,7 @@ function MessagesContent() {
   // Audio & Video Calling Implementation
   // ============================================================
 
-  // Call timer and periodic ringback tone
+  // Call timer when connected
   useEffect(() => {
     let timer: NodeJS.Timeout;
     if (activeCall && activeCall.status === 'connected') {
@@ -666,64 +956,15 @@ function MessagesContent() {
     };
   }, [activeCall?.status]);
 
-  // Audio analyzer to visualize speaking wave activity
-  const setupAudioAnalyzer = (stream: MediaStream) => {
-    try {
-      const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
-      if (!AudioCtx) return;
-      const ctx = new AudioCtx();
-      audioContextRef.current = ctx;
-      const source = ctx.createMediaStreamSource(stream);
-      const analyser = ctx.createAnalyser();
-      analyser.fftSize = 64;
-      source.connect(analyser);
-      analyserRef.current = analyser;
-
-      const dataArray = new Uint8Array(analyser.frequencyBinCount);
-      const updateLevel = () => {
-        if (!analyserRef.current) return;
-        analyserRef.current.getByteFrequencyData(dataArray);
-        let sum = 0;
-        for (let i = 0; i < dataArray.length; i++) {
-          sum += dataArray[i];
-        }
-        const avg = sum / dataArray.length;
-        setActiveCall((prev) => (prev ? { ...prev, audioLevel: avg } : null));
-        animFrameRef.current = requestAnimationFrame(updateLevel);
-      };
-      updateLevel();
-    } catch (e) {
-      console.warn('Audio analyzer init:', e);
-    }
-  };
-
-  const stopMediaStream = () => {
-    if (localStreamRef.current) {
-      localStreamRef.current.getTracks().forEach((track) => track.stop());
-      localStreamRef.current = null;
-    }
-    if (animFrameRef.current) {
-      cancelAnimationFrame(animFrameRef.current);
-      animFrameRef.current = null;
-    }
-    if (audioContextRef.current) {
-      audioContextRef.current.close().catch(() => {});
-      audioContextRef.current = null;
-    }
-    if (autoConnectTimeoutRef.current) {
-      clearTimeout(autoConnectTimeoutRef.current);
-      autoConnectTimeoutRef.current = null;
-    }
-    if (ringToneIntervalRef.current) {
-      clearInterval(ringToneIntervalRef.current);
-      ringToneIntervalRef.current = null;
-    }
-  };
-
   const startCall = async (type: 'audio' | 'video') => {
     if (!activeConversation || !user) return;
 
     const isGroup = !!activeConversation.isGroup;
+    const memberUserIds = isGroup
+      ? activeConversation.members?.map((m) => m.id)
+      : undefined;
+    const targetUserId = isGroup ? undefined : activeConversation.otherMember?.id;
+
     const target = isGroup
       ? {
           id: activeConversation.id,
@@ -741,6 +982,7 @@ function MessagesContent() {
         };
 
     setActiveCall({
+      conversationId: activeConversation.id,
       type,
       target,
       status: 'calling',
@@ -751,25 +993,30 @@ function MessagesContent() {
     });
 
     // Acquire real microphone / camera stream
+    let stream: MediaStream | null = null;
     try {
       if (typeof navigator !== 'undefined' && navigator.mediaDevices?.getUserMedia) {
-        const stream = await navigator.mediaDevices.getUserMedia({
+        stream = await navigator.mediaDevices.getUserMedia({
           audio: true,
           video: type === 'video',
         });
         localStreamRef.current = stream;
-        if (localVideoRef.current && type === 'video') {
-          localVideoRef.current.srcObject = stream;
-        }
+        setLocalStream(stream);
         setupAudioAnalyzer(stream);
       }
     } catch (mediaErr) {
       console.warn('Media hardware notice (running in audio-visual simulation mode):', mediaErr);
     }
 
+    if (stream) {
+      const pc = getOrCreatePeerConnection(targetUserId, activeConversation.id);
+      addStreamTracksToPeer(pc, stream);
+    }
+
     const socket = getSocket(token);
     socket.emit('call:start', {
-      targetUserId: isGroup ? undefined : activeConversation.otherMember?.id,
+      targetUserId,
+      memberUserIds,
       conversationId: activeConversation.id,
       type,
       isGroup,
@@ -782,7 +1029,7 @@ function MessagesContent() {
       },
     });
 
-    // Auto-connect after 4s so the user can test the live connected call experience
+    // Auto-connect after 4s as fallback if testing without a peer
     autoConnectTimeoutRef.current = setTimeout(() => {
       setActiveCall((prev) => {
         if (prev && prev.status === 'calling') {
@@ -799,47 +1046,76 @@ function MessagesContent() {
       clearTimeout(autoConnectTimeoutRef.current);
       autoConnectTimeoutRef.current = null;
     }
+    if (incomingToneIntervalRef.current) {
+      clearInterval(incomingToneIntervalRef.current);
+      incomingToneIntervalRef.current = null;
+    }
     playConnectChime();
 
-    if (activeCall && activeConversation) {
-      const socket = getSocket(token);
-      socket.emit('call:accept', {
-        targetUserId: activeCall.target.isGroup ? undefined : activeCall.target.id,
-        conversationId: activeConversation.id,
-        user: {
-          id: user?.id,
-          username: user?.username,
-          displayName: user?.displayName,
-        },
-      });
-    }
+    const call = activeCallRef.current;
+    if (!call) return;
 
+    const targetUserId = call.target.isGroup ? undefined : call.target.id;
+    const socket = getSocket(token);
+    socket.emit('call:accept', {
+      targetUserId,
+      conversationId: call.conversationId,
+      user: {
+        id: user?.id,
+        username: user?.username,
+        displayName: user?.displayName,
+      },
+    });
+
+    let stream: MediaStream | null = null;
     try {
       if (typeof navigator !== 'undefined' && navigator.mediaDevices?.getUserMedia) {
-        const stream = await navigator.mediaDevices.getUserMedia({
+        stream = await navigator.mediaDevices.getUserMedia({
           audio: true,
-          video: activeCall?.type === 'video',
+          video: call.type === 'video',
         });
         localStreamRef.current = stream;
-        if (localVideoRef.current && activeCall?.type === 'video') {
-          localVideoRef.current.srcObject = stream;
-        }
+        setLocalStream(stream);
         setupAudioAnalyzer(stream);
       }
     } catch (err) {
       console.warn('Accept call media notice:', err);
     }
 
+    const pc = getOrCreatePeerConnection(targetUserId, call.conversationId);
+    if (stream) {
+      addStreamTracksToPeer(pc, stream);
+    }
+
     setActiveCall((prev) => (prev ? { ...prev, status: 'connected' } : null));
+  };
+
+  const declineCall = () => {
+    if (incomingToneIntervalRef.current) {
+      clearInterval(incomingToneIntervalRef.current);
+      incomingToneIntervalRef.current = null;
+    }
+    playEndCallTone();
+    const call = activeCallRef.current;
+    if (call) {
+      const socket = getSocket(token);
+      socket.emit('call:reject', {
+        targetUserId: call.target.isGroup ? undefined : call.target.id,
+        conversationId: call.conversationId,
+      });
+    }
+    stopMediaStream();
+    setActiveCall(null);
   };
 
   const endCall = () => {
     playEndCallTone();
-    if (activeCall && activeConversation) {
+    const call = activeCallRef.current;
+    if (call) {
       const socket = getSocket(token);
       socket.emit('call:end', {
-        targetUserId: activeCall.target.isGroup ? undefined : activeCall.target.id,
-        conversationId: activeConversation.id,
+        targetUserId: call.target.isGroup ? undefined : call.target.id,
+        conversationId: call.conversationId,
       });
     }
     stopMediaStream();
@@ -1674,58 +1950,121 @@ function MessagesContent() {
       {/* ============================================================ */}
       {activeCall && (
         <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in duration-200">
-          <div className="w-full max-w-md bg-white dark:bg-[#0B1422] border border-slate-200 dark:border-[#1E293B] rounded-3xl p-6 flex flex-col items-center gap-5 text-center shadow-2xl relative overflow-hidden varta-call-dialog">
+          {/* Hidden Remote Audio Element for Crystal-Clear Sound Playback */}
+          <audio
+            ref={(node) => {
+              remoteAudioRef.current = node;
+              if (node && remoteStream) {
+                node.srcObject = remoteStream;
+              }
+            }}
+            autoPlay
+            playsInline
+            className="hidden"
+          />
+
+          <div className="w-full max-w-lg bg-white dark:bg-[#0B1422] border border-slate-200 dark:border-[#1E293B] rounded-3xl p-6 flex flex-col items-center gap-5 text-center shadow-2xl relative overflow-hidden varta-call-dialog">
             {/* Ambient background glow */}
             <div className="absolute -top-24 left-1/2 -translate-x-1/2 w-64 h-64 bg-[#FF9933]/15 rounded-full blur-3xl pointer-events-none" />
 
-            {/* Video Call Active Local Preview Container */}
-            {activeCall.type === 'video' && (
+            {/* VIDEO CALL DISPLAY CONTAINER */}
+            {activeCall.type === 'video' ? (
               <div className="w-full aspect-video bg-[#050B14] rounded-2xl overflow-hidden border border-slate-200 dark:border-[#1E293B] relative shadow-inner mb-1 flex items-center justify-center">
-                <video
-                  ref={localVideoRef}
-                  autoPlay
-                  playsInline
-                  muted
-                  className={`w-full h-full object-cover scale-x-[-1] ${
-                    activeCall.isVideoOff ? 'hidden' : 'block'
-                  }`}
-                />
-                {activeCall.isVideoOff && (
-                  <div className="flex flex-col items-center gap-2 text-slate-400">
-                    <VideoOff size={32} />
-                    <span className="text-xs">Camera is paused</span>
-                  </div>
+                {remoteStream ? (
+                  /* Connected Remote Stream view */
+                  <>
+                    <video
+                      ref={(node) => {
+                        remoteVideoRef.current = node;
+                        if (node && remoteStream) {
+                          node.srcObject = remoteStream;
+                        }
+                      }}
+                      autoPlay
+                      playsInline
+                      className="w-full h-full object-cover"
+                    />
+                    {/* Inset Local Picture-in-Picture Stream */}
+                    <div className="absolute top-3 right-3 w-28 h-20 rounded-xl overflow-hidden border-2 border-white/20 bg-black/60 shadow-lg">
+                      <video
+                        ref={(node) => {
+                          localVideoRef.current = node;
+                          if (node && localStream) {
+                            node.srcObject = localStream;
+                          }
+                        }}
+                        autoPlay
+                        playsInline
+                        muted
+                        className={`w-full h-full object-cover scale-x-[-1] ${
+                          activeCall.isVideoOff ? 'hidden' : 'block'
+                        }`}
+                      />
+                      {activeCall.isVideoOff && (
+                        <div className="w-full h-full flex items-center justify-center bg-black/80 text-[10px] text-slate-300">
+                          Paused
+                        </div>
+                      )}
+                      <div className="absolute bottom-1 left-1 px-1.5 py-0.2 rounded bg-black/70 text-[9px] text-white">
+                        You
+                      </div>
+                    </div>
+                  </>
+                ) : (
+                  /* Local Camera Preview while connecting or calling */
+                  <>
+                    <video
+                      ref={(node) => {
+                        localVideoRef.current = node;
+                        if (node && localStream) {
+                          node.srcObject = localStream;
+                        }
+                      }}
+                      autoPlay
+                      playsInline
+                      muted
+                      className={`w-full h-full object-cover scale-x-[-1] ${
+                        activeCall.isVideoOff ? 'hidden' : 'block'
+                      }`}
+                    />
+                    {activeCall.isVideoOff && (
+                      <div className="flex flex-col items-center gap-2 text-slate-400">
+                        <VideoOff size={32} />
+                        <span className="text-xs">Camera is paused</span>
+                      </div>
+                    )}
+                    <div className="absolute top-2.5 left-2.5 px-2 py-0.5 rounded-full bg-black/60 backdrop-blur-sm border border-white/10 text-[10px] text-white font-medium flex items-center gap-1.5">
+                      <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />
+                      {activeCall.status === 'connected' ? 'Camera Active' : 'Live Preview'}
+                    </div>
+                  </>
                 )}
-                <div className="absolute top-2.5 left-2.5 px-2 py-0.5 rounded-full bg-black/60 backdrop-blur-sm border border-white/10 text-[10px] text-white font-medium flex items-center gap-1.5">
-                  <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />
-                  Live Preview
+              </div>
+            ) : (
+              /* AUDIO CALL PULSING AVATAR */
+              <div className="relative mt-2">
+                <div className="w-24 h-24 rounded-full bg-slate-100 dark:bg-[#101D2D] border-2 border-[#FF9933] flex items-center justify-center overflow-hidden shadow-xl">
+                  {activeCall.target.isGroup ? (
+                    <div className="w-full h-full bg-gradient-to-br from-[#FF9933]/25 to-[#00C853]/20 flex items-center justify-center text-[#E65100] dark:text-[#FF9933]">
+                      <Users size={36} />
+                    </div>
+                  ) : activeCall.target.avatarUrl ? (
+                    <img
+                      src={activeCall.target.avatarUrl}
+                      alt={activeCall.target.name}
+                      className="w-full h-full object-cover"
+                    />
+                  ) : (
+                    <span className="text-2xl font-bold text-[#E65100] dark:text-[#FF9933]">
+                      {activeCall.target.name.charAt(0).toUpperCase()}
+                    </span>
+                  )}
                 </div>
+                {activeCall.status === 'calling' && (
+                  <div className="absolute inset-0 rounded-full border-2 border-[#FF9933] animate-ping opacity-75 pointer-events-none" />
+                )}
               </div>
             )}
-
-            {/* Pulsing Avatar for Audio & Video Calling */}
-            <div className="relative">
-              <div className="w-24 h-24 rounded-full bg-slate-100 dark:bg-[#101D2D] border-2 border-[#FF9933] flex items-center justify-center overflow-hidden shadow-xl">
-                {activeCall.target.isGroup ? (
-                  <div className="w-full h-full bg-gradient-to-br from-[#FF9933]/25 to-[#00C853]/20 flex items-center justify-center text-[#E65100] dark:text-[#FF9933]">
-                    <Users size={36} />
-                  </div>
-                ) : activeCall.target.avatarUrl ? (
-                  <img
-                    src={activeCall.target.avatarUrl}
-                    alt={activeCall.target.name}
-                    className="w-full h-full object-cover"
-                  />
-                ) : (
-                  <span className="text-2xl font-bold text-[#E65100] dark:text-[#FF9933]">
-                    {activeCall.target.name.charAt(0).toUpperCase()}
-                  </span>
-                )}
-              </div>
-              {activeCall.status === 'calling' && (
-                <div className="absolute inset-0 rounded-full border-2 border-[#FF9933] animate-ping opacity-75 pointer-events-none" />
-              )}
-            </div>
 
             {/* Target Information */}
             <div className="flex flex-col items-center">
@@ -1762,6 +2101,25 @@ function MessagesContent() {
                   </>
                 )}
               </div>
+
+              {/* Quick Connect for Self/Preview Testing */}
+              {activeCall.status === 'calling' && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (autoConnectTimeoutRef.current) {
+                      clearTimeout(autoConnectTimeoutRef.current);
+                      autoConnectTimeoutRef.current = null;
+                    }
+                    playConnectChime();
+                    setActiveCall((prev) => (prev ? { ...prev, status: 'connected' } : null));
+                  }}
+                  className="mt-2 text-[11px] text-[#FF9933] hover:underline cursor-pointer opacity-80 hover:opacity-100 transition"
+                  title="Test connected call immediately"
+                >
+                  Connect now (test mode)
+                </button>
+              )}
             </div>
 
             {/* Live Audio / Voice Activity Visualizer Bars */}
@@ -1787,7 +2145,7 @@ function MessagesContent() {
               <div className="flex items-center gap-6 mt-1">
                 <button
                   type="button"
-                  onClick={endCall}
+                  onClick={declineCall}
                   className="p-4 rounded-full bg-red-600 hover:bg-red-700 text-white shadow-lg transition active:scale-95 cursor-pointer call-btn-danger"
                   title="Decline"
                 >

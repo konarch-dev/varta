@@ -130,6 +130,7 @@ export class EventsGateway implements OnGatewayConnection, OnGatewayDisconnect {
     @MessageBody()
     data: {
       targetUserId?: string;
+      memberUserIds?: string[];
       conversationId: string;
       type: 'audio' | 'video';
       caller: any;
@@ -145,8 +146,14 @@ export class EventsGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
     if (data.targetUserId) {
       this.server.to(`user:${data.targetUserId}`).emit('call:incoming', payload);
-    }
-    if (data.conversationId) {
+    } else if (data.memberUserIds && Array.isArray(data.memberUserIds)) {
+      data.memberUserIds.forEach((uid) => {
+        if (uid !== client.data?.userId) {
+          this.server.to(`user:${uid}`).emit('call:incoming', payload);
+        }
+      });
+      client.to(`conversation:${data.conversationId}`).emit('call:incoming', payload);
+    } else if (data.conversationId) {
       client.to(`conversation:${data.conversationId}`).emit('call:incoming', payload);
     }
   }
@@ -162,8 +169,7 @@ export class EventsGateway implements OnGatewayConnection, OnGatewayDisconnect {
     };
     if (data.targetUserId) {
       this.server.to(`user:${data.targetUserId}`).emit('call:accepted', payload);
-    }
-    if (data.conversationId) {
+    } else if (data.conversationId) {
       client.to(`conversation:${data.conversationId}`).emit('call:accepted', payload);
     }
   }
@@ -177,8 +183,7 @@ export class EventsGateway implements OnGatewayConnection, OnGatewayDisconnect {
       this.server.to(`user:${data.targetUserId}`).emit('call:rejected', {
         conversationId: data.conversationId,
       });
-    }
-    if (data.conversationId) {
+    } else if (data.conversationId) {
       client.to(`conversation:${data.conversationId}`).emit('call:rejected', {
         conversationId: data.conversationId,
       });
@@ -194,8 +199,7 @@ export class EventsGateway implements OnGatewayConnection, OnGatewayDisconnect {
       this.server.to(`user:${data.targetUserId}`).emit('call:ended', {
         conversationId: data.conversationId,
       });
-    }
-    if (data.conversationId) {
+    } else if (data.conversationId) {
       client.to(`conversation:${data.conversationId}`).emit('call:ended', {
         conversationId: data.conversationId,
       });
