@@ -33,6 +33,7 @@ import {
   Radio,
   Clock,
   Sparkles,
+  Eye,
 } from 'lucide-react';
 import Link from 'next/link';
 import { VartaLogo } from '../../components/common/VartaLogo';
@@ -59,12 +60,19 @@ export default function AdminDashboardPage() {
   // Posts tab
   const [postSearch, setPostSearch] = useState('');
   const [postBlockedFilter, setPostBlockedFilter] = useState('');
+  const [postGroupIdFilter, setPostGroupIdFilter] = useState('');
   const [postPage, setPostPage] = useState(1);
 
   // Groups tab
   const [groupSearch, setGroupSearch] = useState('');
   const [groupCategoryFilter, setGroupCategoryFilter] = useState('');
   const [groupPage, setGroupPage] = useState(1);
+
+  // Inspecting specific group posts
+  const [inspectingGroup, setInspectingGroup] = useState<any | null>(null);
+  const [inspectingGroupSearch, setInspectingGroupSearch] = useState('');
+  const [inspectingGroupBlockedFilter, setInspectingGroupBlockedFilter] = useState('');
+  const [inspectingGroupPage, setInspectingGroupPage] = useState(1);
 
   // Reports tab
   const [selectedReportStatus, setSelectedReportStatus] = useState<ReportStatus>(ReportStatus.PENDING);
@@ -105,11 +113,12 @@ export default function AdminDashboardPage() {
 
   // 3. Fetch Posts List
   const { data: postsData, isLoading: isPostsLoading, refetch: refetchPosts } = useQuery({
-    queryKey: ['admin-posts', postSearch, postBlockedFilter, postPage],
+    queryKey: ['admin-posts', postSearch, postBlockedFilter, postGroupIdFilter, postPage],
     queryFn: () => {
       const params = new URLSearchParams();
       if (postSearch.trim()) params.append('search', postSearch.trim());
       if (postBlockedFilter) params.append('isBlocked', postBlockedFilter);
+      if (postGroupIdFilter) params.append('groupId', postGroupIdFilter);
       params.append('page', String(postPage));
       params.append('limit', '15');
       return apiRequest(`/admin/posts?${params.toString()}`);
@@ -128,17 +137,43 @@ export default function AdminDashboardPage() {
       params.append('limit', '15');
       return apiRequest(`/admin/groups?${params.toString()}`);
     },
-    enabled: (user?.role === 'ADMIN' || user?.role === 'MODERATOR') && (activeTab === 'groups' || createPostModalOpen),
+    enabled:
+      (user?.role === 'ADMIN' || user?.role === 'MODERATOR') &&
+      (activeTab === 'groups' || activeTab === 'posts' || createPostModalOpen),
   });
 
-  // 5. Fetch Reports Queue
+  // 5. Fetch Posts for Inspected Group
+  const {
+    data: groupPostsData,
+    isLoading: isGroupPostsLoading,
+    refetch: refetchGroupPosts,
+  } = useQuery({
+    queryKey: [
+      'admin-group-posts',
+      inspectingGroup?.id,
+      inspectingGroupSearch,
+      inspectingGroupBlockedFilter,
+      inspectingGroupPage,
+    ],
+    queryFn: () => {
+      const params = new URLSearchParams();
+      if (inspectingGroupSearch.trim()) params.append('search', inspectingGroupSearch.trim());
+      if (inspectingGroupBlockedFilter) params.append('isBlocked', inspectingGroupBlockedFilter);
+      params.append('page', String(inspectingGroupPage));
+      params.append('limit', '10');
+      return apiRequest(`/admin/groups/${inspectingGroup.id}/posts?${params.toString()}`);
+    },
+    enabled: (user?.role === 'ADMIN' || user?.role === 'MODERATOR') && !!inspectingGroup?.id,
+  });
+
+  // 6. Fetch Reports Queue
   const { data: reports, isLoading: isReportsLoading, refetch: refetchReports } = useQuery({
     queryKey: ['admin-reports', selectedReportStatus],
     queryFn: () => apiRequest(`/admin/reports?status=${selectedReportStatus}&limit=30`),
     enabled: (user?.role === 'ADMIN' || user?.role === 'MODERATOR') && activeTab === 'reports',
   });
 
-  // 6. Fetch Audit Logs
+  // 7. Fetch Audit Logs
   const { data: auditLogs, isLoading: isAuditLoading } = useQuery({
     queryKey: ['admin-audit-logs'],
     queryFn: () => apiRequest('/admin/audit-logs?limit=40'),
@@ -204,6 +239,7 @@ export default function AdminDashboardPage() {
       }),
     onSuccess: () => {
       refetchPosts();
+      queryClient.invalidateQueries({ queryKey: ['admin-group-posts'] });
       queryClient.invalidateQueries({ queryKey: ['admin-metrics'] });
     },
     onError: (err: any) => {
@@ -219,6 +255,8 @@ export default function AdminDashboardPage() {
       }),
     onSuccess: () => {
       refetchPosts();
+      queryClient.invalidateQueries({ queryKey: ['admin-group-posts'] });
+      queryClient.invalidateQueries({ queryKey: ['admin-groups'] });
       queryClient.invalidateQueries({ queryKey: ['admin-metrics'] });
     },
     onError: (err: any) => {
@@ -233,8 +271,11 @@ export default function AdminDashboardPage() {
         method: 'PATCH',
         body: JSON.stringify({ reason }),
       }),
-    onSuccess: () => {
+    onSuccess: (updatedGroup: any) => {
       refetchGroups();
+      if (inspectingGroup && inspectingGroup.id === updatedGroup.id) {
+        setInspectingGroup((prev: any) => ({ ...prev, isPrivate: updatedGroup.isPrivate }));
+      }
     },
     onError: (err: any) => {
       alert(err.message || 'Failed to toggle group status');
@@ -250,6 +291,9 @@ export default function AdminDashboardPage() {
     onSuccess: () => {
       refetchGroups();
       queryClient.invalidateQueries({ queryKey: ['admin-metrics'] });
+      if (inspectingGroup) {
+        setInspectingGroup(null);
+      }
     },
     onError: (err: any) => {
       alert(err.message || 'Failed to delete group');
@@ -284,6 +328,7 @@ export default function AdminDashboardPage() {
       setSelectedGroupForPost('');
       queryClient.invalidateQueries({ queryKey: ['admin-posts'] });
       queryClient.invalidateQueries({ queryKey: ['admin-groups'] });
+      queryClient.invalidateQueries({ queryKey: ['admin-group-posts'] });
       queryClient.invalidateQueries({ queryKey: ['admin-metrics'] });
       alert('Post created and published in group successfully!');
     } catch (err: any) {
@@ -403,9 +448,12 @@ export default function AdminDashboardPage() {
           </div>
 
           <div
-            onClick={() => setActiveTab('posts')}
+            onClick={() => {
+              setActiveTab('posts');
+              setPostGroupIdFilter('');
+            }}
             className={`p-4 bg-[#0B1422] border rounded-2xl flex flex-col gap-1 cursor-pointer transition hover:border-[#38BDF8]/40 ${
-              activeTab === 'posts' ? 'border-[#38BDF8]' : 'border-[#1E293B]'
+              activeTab === 'posts' && !postGroupIdFilter ? 'border-[#38BDF8]' : 'border-[#1E293B]'
             }`}
           >
             <span className="text-xs font-semibold text-slate-400 flex items-center gap-1.5">
@@ -551,7 +599,7 @@ export default function AdminDashboardPage() {
                 </h3>
                 <p className="text-xs text-slate-400 mt-1 max-w-xl">
                   Centralized portal for managing users, monitoring and moderating posts, governing community groups,
-                  posting official administrative broadcasts, and reviewing grievances under Indian IT Rules.
+                  inspecting community posts, taking down violations, and reviewing grievance reports under Indian IT Rules.
                 </p>
               </div>
 
@@ -564,32 +612,32 @@ export default function AdminDashboardPage() {
                   Post in Group
                 </button>
                 <button
-                  onClick={() => setActiveTab('users')}
+                  onClick={() => setActiveTab('groups')}
                   className="px-4 py-2 bg-[#101D2D] hover:bg-[#162538] border border-[#1E293B] text-slate-200 text-xs font-bold rounded-xl transition flex items-center gap-1.5"
                 >
-                  <Users size={15} />
-                  Manage Users
+                  <Layers size={15} />
+                  Explore Groups
                 </button>
               </div>
             </div>
 
-            {/* Quick Actions & Recent Platform Activity */}
+            {/* Quick Actions & Platform Modules */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div
-                onClick={() => setActiveTab('users')}
-                className="p-5 bg-[#0B1422] border border-[#1E293B] hover:border-[#FF9933]/40 rounded-2xl transition cursor-pointer flex flex-col justify-between"
+                onClick={() => setActiveTab('groups')}
+                className="p-5 bg-[#0B1422] border border-[#1E293B] hover:border-[#A855F7]/40 rounded-2xl transition cursor-pointer flex flex-col justify-between"
               >
                 <div>
-                  <div className="w-10 h-10 rounded-xl bg-[#FF9933]/15 text-[#FF9933] flex items-center justify-center mb-3">
-                    <Users size={20} />
+                  <div className="w-10 h-10 rounded-xl bg-[#A855F7]/15 text-[#A855F7] flex items-center justify-center mb-3">
+                    <Layers size={20} />
                   </div>
-                  <h4 className="font-bold text-white text-sm">User Governance</h4>
+                  <h4 className="font-bold text-white text-sm">Community Groups & Posts</h4>
                   <p className="text-xs text-slate-400 mt-1">
-                    Search user profiles, manage verification badges, assign admin/moderator roles, or block offending accounts.
+                    Select any community group to inspect all its posts. Restrict or block offending posts, delete them permanently, or post official messages.
                   </p>
                 </div>
-                <span className="text-xs text-[#FF9933] font-bold mt-4 flex items-center gap-1">
-                  Go to Users <ChevronRight size={14} />
+                <span className="text-xs text-[#A855F7] font-bold mt-4 flex items-center gap-1">
+                  Manage Groups & Posts <ChevronRight size={14} />
                 </span>
               </div>
 
@@ -601,9 +649,9 @@ export default function AdminDashboardPage() {
                   <div className="w-10 h-10 rounded-xl bg-[#38BDF8]/15 text-[#38BDF8] flex items-center justify-center mb-3">
                     <MessageSquare size={20} />
                   </div>
-                  <h4 className="font-bold text-white text-sm">Content Moderation</h4>
+                  <h4 className="font-bold text-white text-sm">Global Post Moderation</h4>
                   <p className="text-xs text-slate-400 mt-1">
-                    Review public posts, inspect media attachments, enforce community guidelines, or take down violations.
+                    Filter posts by group or author, inspect media attachments, enforce community guidelines, and takedown policy violations.
                   </p>
                 </div>
                 <span className="text-xs text-[#38BDF8] font-bold mt-4 flex items-center gap-1">
@@ -612,20 +660,20 @@ export default function AdminDashboardPage() {
               </div>
 
               <div
-                onClick={() => setActiveTab('groups')}
-                className="p-5 bg-[#0B1422] border border-[#1E293B] hover:border-[#A855F7]/40 rounded-2xl transition cursor-pointer flex flex-col justify-between"
+                onClick={() => setActiveTab('users')}
+                className="p-5 bg-[#0B1422] border border-[#1E293B] hover:border-[#FF9933]/40 rounded-2xl transition cursor-pointer flex flex-col justify-between"
               >
                 <div>
-                  <div className="w-10 h-10 rounded-xl bg-[#A855F7]/15 text-[#A855F7] flex items-center justify-center mb-3">
-                    <Layers size={20} />
+                  <div className="w-10 h-10 rounded-xl bg-[#FF9933]/15 text-[#FF9933] flex items-center justify-center mb-3">
+                    <Users size={20} />
                   </div>
-                  <h4 className="font-bold text-white text-sm">Group & Community Control</h4>
+                  <h4 className="font-bold text-white text-sm">User Governance</h4>
                   <p className="text-xs text-slate-400 mt-1">
-                    Oversee communities, block or restrict rogue groups, and publish official posts directly to any group.
+                    Search user profiles, manage blue verification badges, assign admin/moderator roles, or suspend offending accounts.
                   </p>
                 </div>
-                <span className="text-xs text-[#A855F7] font-bold mt-4 flex items-center gap-1">
-                  Go to Groups <ChevronRight size={14} />
+                <span className="text-xs text-[#FF9933] font-bold mt-4 flex items-center gap-1">
+                  Go to Users <ChevronRight size={14} />
                 </span>
               </div>
             </div>
@@ -877,8 +925,8 @@ export default function AdminDashboardPage() {
         {activeTab === 'posts' && (
           <div className="flex flex-col gap-4">
             {/* Search & Filter Bar */}
-            <div className="bg-[#0B1422] border border-[#1E293B] p-4 rounded-2xl flex flex-col sm:flex-row items-center gap-3 justify-between">
-              <div className="relative w-full sm:w-80">
+            <div className="bg-[#0B1422] border border-[#1E293B] p-4 rounded-2xl flex flex-col lg:flex-row items-stretch lg:items-center gap-3 justify-between">
+              <div className="relative flex-1 max-w-md">
                 <Search size={15} className="absolute left-3.5 top-3 text-slate-400" />
                 <input
                   type="text"
@@ -900,7 +948,25 @@ export default function AdminDashboardPage() {
                 )}
               </div>
 
-              <div className="flex items-center gap-2.5 w-full sm:w-auto">
+              <div className="flex flex-wrap items-center gap-2.5">
+                {/* Group Filter */}
+                <select
+                  value={postGroupIdFilter}
+                  onChange={(e) => {
+                    setPostGroupIdFilter(e.target.value);
+                    setPostPage(1);
+                  }}
+                  className="bg-[#101D2D] border border-[#1E293B] rounded-xl px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-[#FF9933] max-w-[180px] sm:max-w-[220px] truncate"
+                >
+                  <option value="">All Community Groups</option>
+                  {groupsData?.groups?.map((g: any) => (
+                    <option key={g.id} value={g.id}>
+                      {g.name}
+                    </option>
+                  ))}
+                </select>
+
+                {/* Blocked / Active Filter */}
                 <select
                   value={postBlockedFilter}
                   onChange={(e) => {
@@ -911,7 +977,7 @@ export default function AdminDashboardPage() {
                 >
                   <option value="">All Statuses</option>
                   <option value="false">Active Posts</option>
-                  <option value="true">Blocked / Taken Down</option>
+                  <option value="true">Blocked / Restricted</option>
                 </select>
 
                 <button
@@ -923,6 +989,28 @@ export default function AdminDashboardPage() {
                 </button>
               </div>
             </div>
+
+            {/* Active Group Filter Banner */}
+            {postGroupIdFilter && (
+              <div className="bg-[#A855F7]/10 border border-[#A855F7]/30 px-4 py-2.5 rounded-2xl flex items-center justify-between text-xs">
+                <div className="flex items-center gap-2 text-slate-200">
+                  <Layers size={14} className="text-[#A855F7]" />
+                  <span>
+                    Viewing posts in group:{' '}
+                    <strong className="text-white">
+                      {groupsData?.groups?.find((g: any) => g.id === postGroupIdFilter)?.name || 'Selected Group'}
+                    </strong>
+                  </span>
+                </div>
+                <button
+                  onClick={() => setPostGroupIdFilter('')}
+                  className="text-xs text-slate-400 hover:text-white flex items-center gap-1 font-semibold"
+                >
+                  <X size={13} />
+                  Clear Filter
+                </button>
+              </div>
+            )}
 
             {/* Posts Cards Grid / List */}
             {isPostsLoading ? (
@@ -969,9 +1057,16 @@ export default function AdminDashboardPage() {
                             </span>
 
                             {post.group && (
-                              <span className="px-2 py-0.5 rounded-md bg-[#A855F7]/15 border border-[#A855F7]/30 text-[#A855F7] text-[10px] font-bold flex items-center gap-1">
+                              <button
+                                onClick={() => {
+                                  const grp = groupsData?.groups?.find((g: any) => g.id === post.group.id) || post.group;
+                                  setInspectingGroup(grp);
+                                }}
+                                className="px-2 py-0.5 rounded-md bg-[#A855F7]/15 hover:bg-[#A855F7]/25 border border-[#A855F7]/30 text-[#A855F7] text-[10px] font-bold flex items-center gap-1 transition"
+                                title="Inspect this group"
+                              >
                                 <Layers size={10} /> {post.group.name}
-                              </span>
+                              </button>
                             )}
 
                             <span
@@ -981,7 +1076,7 @@ export default function AdminDashboardPage() {
                                   : 'bg-emerald-500/15 border border-emerald-500/30 text-emerald-400'
                               }`}
                             >
-                              {isBlocked ? 'Blocked / Taken Down' : 'Active'}
+                              {isBlocked ? 'Blocked / Restricted' : 'Active'}
                             </span>
                           </div>
 
@@ -1020,7 +1115,7 @@ export default function AdminDashboardPage() {
                           onClick={() =>
                             toggleBlockPostMutation.mutate({
                               postId: post.id,
-                              reason: isBlocked ? 'Unblocked by admin' : 'Blocked by admin for moderation review',
+                              reason: isBlocked ? 'Unblocked by admin' : 'Blocked / restricted by admin for moderation review',
                             })
                           }
                           className={`px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 ${
@@ -1037,7 +1132,7 @@ export default function AdminDashboardPage() {
                           ) : (
                             <>
                               <Ban size={13} />
-                              Block / Takedown
+                              Block / Restrict
                             </>
                           )}
                         </button>
@@ -1197,55 +1292,73 @@ export default function AdminDashboardPage() {
                             🏷️ {group.category}
                           </span>
                           <div className="flex items-center gap-2">
-                            <span>👥 {group._count?.members || group.memberCount || 0}</span>
-                            <span>📝 {group._count?.posts || group.postCount || 0}</span>
+                            <span>👥 {group._count?.members || group.memberCount || 0} members</span>
+                            <span className="text-white font-semibold">
+                              📝 {group._count?.posts || group.postCount || 0} posts
+                            </span>
                           </div>
                         </div>
                       </div>
 
                       {/* Group Action Buttons */}
-                      <div className="flex items-center gap-2 pt-2 border-t border-[#1E293B]">
+                      <div className="flex flex-col gap-2 pt-2 border-t border-[#1E293B]">
+                        {/* Primary View & Moderate Posts Button */}
                         <button
                           onClick={() => {
-                            setSelectedGroupForPost(group.id);
-                            setCreatePostModalOpen(true);
+                            setInspectingGroup(group);
+                            setInspectingGroupSearch('');
+                            setInspectingGroupBlockedFilter('');
+                            setInspectingGroupPage(1);
                           }}
-                          className="flex-1 px-3 py-1.5 bg-[#FF9933]/15 hover:bg-[#FF9933]/25 border border-[#FF9933]/30 text-[#FF9933] text-xs font-bold rounded-xl transition flex items-center justify-center gap-1.5"
+                          className="w-full px-3 py-2 bg-[#38BDF8]/15 hover:bg-[#38BDF8]/25 border border-[#38BDF8]/30 text-[#38BDF8] text-xs font-bold rounded-xl transition flex items-center justify-center gap-1.5 shadow-sm"
                         >
-                          <Plus size={13} />
-                          Post in Group
+                          <Eye size={14} />
+                          <span>View & Moderate Posts ({group._count?.posts || group.postCount || 0})</span>
                         </button>
 
-                        <button
-                          onClick={() =>
-                            toggleBlockGroupMutation.mutate({
-                              groupId: group.id,
-                              reason: isBlocked ? 'Restored public access' : 'Restricted by admin',
-                            })
-                          }
-                          className={`p-2 rounded-xl border text-xs transition ${
-                            isBlocked
-                              ? 'bg-emerald-500/15 border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/25'
-                              : 'bg-amber-500/15 border-amber-500/30 text-amber-400 hover:bg-amber-500/25'
-                          }`}
-                          title={isBlocked ? 'Unblock / Set Public' : 'Block / Restrict Group'}
-                        >
-                          {isBlocked ? <Unlock size={14} /> : <Ban size={14} />}
-                        </button>
-
-                        {user.role === 'ADMIN' && (
+                        <div className="flex items-center gap-2">
                           <button
                             onClick={() => {
-                              if (confirm(`Permanently delete group "${group.name}"?`)) {
-                                deleteGroupMutation.mutate(group.id);
-                              }
+                              setSelectedGroupForPost(group.id);
+                              setCreatePostModalOpen(true);
                             }}
-                            className="p-2 rounded-xl bg-red-500/15 border border-red-500/30 text-red-400 hover:bg-red-500/25 transition"
-                            title="Delete Group"
+                            className="flex-1 px-3 py-1.5 bg-[#FF9933]/15 hover:bg-[#FF9933]/25 border border-[#FF9933]/30 text-[#FF9933] text-xs font-bold rounded-xl transition flex items-center justify-center gap-1.5"
                           >
-                            <Trash2 size={14} />
+                            <Plus size={13} />
+                            Post in Group
                           </button>
-                        )}
+
+                          <button
+                            onClick={() =>
+                              toggleBlockGroupMutation.mutate({
+                                groupId: group.id,
+                                reason: isBlocked ? 'Restored public access' : 'Restricted by admin',
+                              })
+                            }
+                            className={`p-2 rounded-xl border text-xs transition ${
+                              isBlocked
+                                ? 'bg-emerald-500/15 border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/25'
+                                : 'bg-amber-500/15 border-amber-500/30 text-amber-400 hover:bg-amber-500/25'
+                            }`}
+                            title={isBlocked ? 'Unblock / Set Public' : 'Block / Restrict Group'}
+                          >
+                            {isBlocked ? <Unlock size={14} /> : <Ban size={14} />}
+                          </button>
+
+                          {user.role === 'ADMIN' && (
+                            <button
+                              onClick={() => {
+                                if (confirm(`Permanently delete group "${group.name}"?`)) {
+                                  deleteGroupMutation.mutate(group.id);
+                                }
+                              }}
+                              className="p-2 rounded-xl bg-red-500/15 border border-red-500/30 text-red-400 hover:bg-red-500/25 transition"
+                              title="Delete Group"
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                          )}
+                        </div>
                       </div>
                     </div>
                   );
@@ -1467,6 +1580,334 @@ export default function AdminDashboardPage() {
           </div>
         )}
       </main>
+
+      {/* MODAL: GROUP POSTS INSPECTOR & MODERATION */}
+      {inspectingGroup && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-3 sm:p-5">
+          <div className="bg-[#0B1422] border border-[#1E293B] w-full max-w-4xl max-h-[90vh] rounded-3xl shadow-2xl flex flex-col overflow-hidden">
+            {/* Header / Group Identity */}
+            <div className="p-5 border-b border-[#1E293B] bg-[#101D2D]/50 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div className="flex items-center gap-3.5">
+                <div className="w-12 h-12 rounded-2xl bg-[#162538] border border-[#1E293B] flex items-center justify-center font-bold text-[#A855F7] overflow-hidden flex-shrink-0">
+                  {inspectingGroup.avatarUrl ? (
+                    <img
+                      src={inspectingGroup.avatarUrl}
+                      alt={inspectingGroup.name}
+                      className="w-full h-full object-cover"
+                    />
+                  ) : (
+                    <Layers size={24} />
+                  )}
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h3 className="font-extrabold text-white text-base sm:text-lg">
+                      {inspectingGroup.name}
+                    </h3>
+                    <span
+                      className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${
+                        inspectingGroup.isPrivate
+                          ? 'bg-amber-500/15 border border-amber-500/30 text-amber-400'
+                          : 'bg-emerald-500/15 border border-emerald-500/30 text-emerald-400'
+                      }`}
+                    >
+                      {inspectingGroup.isPrivate ? 'Restricted / Blocked' : 'Public'}
+                    </span>
+                  </div>
+                  <div className="text-xs text-slate-400 flex items-center gap-2 mt-0.5">
+                    <span>/g/{inspectingGroup.slug}</span>
+                    <span>•</span>
+                    <span className="text-slate-300">🏷️ {inspectingGroup.category}</span>
+                    <span>•</span>
+                    <span>👥 {inspectingGroup._count?.members || inspectingGroup.memberCount || 0} members</span>
+                    <span>•</span>
+                    <span className="text-[#38BDF8] font-bold">
+                      📝 {inspectingGroup._count?.posts || inspectingGroup.postCount || 0} total posts
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Quick Actions in Header */}
+              <div className="flex items-center gap-2 self-end sm:self-center">
+                <button
+                  onClick={() => {
+                    setSelectedGroupForPost(inspectingGroup.id);
+                    setCreatePostModalOpen(true);
+                  }}
+                  className="px-3.5 py-1.5 bg-[#FF9933] hover:bg-[#E68525] text-white text-xs font-bold rounded-xl transition flex items-center gap-1.5 shadow-sm shadow-[#FF9933]/20"
+                >
+                  <Plus size={14} />
+                  Post in this Group
+                </button>
+
+                <button
+                  onClick={() =>
+                    toggleBlockGroupMutation.mutate({
+                      groupId: inspectingGroup.id,
+                      reason: inspectingGroup.isPrivate ? 'Restored public access' : 'Restricted by admin',
+                    })
+                  }
+                  className={`px-3 py-1.5 rounded-xl border text-xs font-bold transition flex items-center gap-1.5 ${
+                    inspectingGroup.isPrivate
+                      ? 'bg-emerald-500/15 border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/25'
+                      : 'bg-amber-500/15 border-amber-500/30 text-amber-400 hover:bg-amber-500/25'
+                  }`}
+                  title={inspectingGroup.isPrivate ? 'Unblock / Set Public' : 'Block / Restrict Group'}
+                >
+                  {inspectingGroup.isPrivate ? (
+                    <>
+                      <Unlock size={13} />
+                      Unblock Group
+                    </>
+                  ) : (
+                    <>
+                      <Ban size={13} />
+                      Restrict Group
+                    </>
+                  )}
+                </button>
+
+                <button
+                  onClick={() => setInspectingGroup(null)}
+                  className="p-1.5 rounded-xl text-slate-400 hover:text-white hover:bg-[#162538] transition"
+                  title="Close Inspector"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+            </div>
+
+            {/* Sub-Header: Search & Filters for this Group's Posts */}
+            <div className="px-5 py-3 border-b border-[#1E293B] bg-[#0B1422] flex flex-col sm:flex-row items-center justify-between gap-3">
+              <div className="relative w-full sm:w-72">
+                <Search size={14} className="absolute left-3 top-2.5 text-slate-400" />
+                <input
+                  type="text"
+                  placeholder="Search inside this group's posts..."
+                  value={inspectingGroupSearch}
+                  onChange={(e) => {
+                    setInspectingGroupSearch(e.target.value);
+                    setInspectingGroupPage(1);
+                  }}
+                  className="w-full bg-[#101D2D] border border-[#1E293B] rounded-xl pl-8 pr-7 py-1.5 text-xs text-white placeholder-slate-400 focus:outline-none focus:border-[#FF9933]"
+                />
+                {inspectingGroupSearch && (
+                  <button
+                    onClick={() => setInspectingGroupSearch('')}
+                    className="absolute right-2.5 top-2 text-slate-400 hover:text-white"
+                  >
+                    <X size={13} />
+                  </button>
+                )}
+              </div>
+
+              <div className="flex items-center gap-2.5 w-full sm:w-auto">
+                <select
+                  value={inspectingGroupBlockedFilter}
+                  onChange={(e) => {
+                    setInspectingGroupBlockedFilter(e.target.value);
+                    setInspectingGroupPage(1);
+                  }}
+                  className="bg-[#101D2D] border border-[#1E293B] rounded-xl px-2.5 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-[#FF9933]"
+                >
+                  <option value="">All Statuses</option>
+                  <option value="false">Active Posts</option>
+                  <option value="true">Blocked / Restricted</option>
+                </select>
+
+                <button
+                  onClick={() => refetchGroupPosts()}
+                  className="p-1.5 bg-[#101D2D] hover:bg-[#162538] border border-[#1E293B] rounded-xl text-slate-300 transition"
+                  title="Refresh Posts"
+                >
+                  <Clock size={15} />
+                </button>
+              </div>
+            </div>
+
+            {/* Posts List inside Group */}
+            <div className="p-5 overflow-y-auto flex-1 flex flex-col gap-3">
+              {isGroupPostsLoading ? (
+                <div className="p-12 flex flex-col items-center justify-center text-slate-400 gap-2">
+                  <Loader2 className="animate-spin text-[#FF9933]" size={28} />
+                  <span className="text-xs">Loading group posts...</span>
+                </div>
+              ) : !groupPostsData?.posts || groupPostsData.posts.length === 0 ? (
+                <div className="p-12 text-center text-slate-400 text-xs bg-[#101D2D]/30 border border-[#1E293B] rounded-2xl flex flex-col items-center gap-2">
+                  <MessageSquare size={28} className="text-slate-600" />
+                  <span>No posts found in this community group matching your criteria.</span>
+                  <button
+                    onClick={() => {
+                      setSelectedGroupForPost(inspectingGroup.id);
+                      setCreatePostModalOpen(true);
+                    }}
+                    className="mt-2 px-3.5 py-1.5 bg-[#FF9933] hover:bg-[#E68525] text-white text-xs font-bold rounded-xl transition"
+                  >
+                    Create the first post now
+                  </button>
+                </div>
+              ) : (
+                groupPostsData.posts.map((post: any) => {
+                  const isBlocked = !!post.deletedAt;
+
+                  return (
+                    <div
+                      key={post.id}
+                      className={`p-4 bg-[#101D2D]/40 border rounded-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 transition ${
+                        isBlocked ? 'border-red-500/40 bg-red-950/15' : 'border-[#1E293B] hover:border-[#1E293B]/80'
+                      }`}
+                    >
+                      <div className="flex items-start gap-3 flex-1 min-w-0">
+                        <div className="w-9 h-9 rounded-full bg-[#162538] border border-[#1E293B] flex items-center justify-center font-bold text-[#FF9933] overflow-hidden flex-shrink-0">
+                          {post.author?.profile?.avatarUrl ? (
+                            <img
+                              src={post.author.profile.avatarUrl}
+                              alt={post.author.username}
+                              className="w-full h-full object-cover"
+                            />
+                          ) : (
+                            post.author?.username?.[0]?.toUpperCase() || 'U'
+                          )}
+                        </div>
+
+                        <div className="flex flex-col gap-1 min-w-0 flex-1">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className="font-bold text-white text-xs">
+                              {post.author?.profile?.displayName || post.author?.username}
+                            </span>
+                            <span className="text-[11px] text-slate-400">
+                              @{post.author?.username}
+                            </span>
+                            {post.author?.isVerified && (
+                              <BadgeCheck size={13} className="text-[#38BDF8]" />
+                            )}
+                            <span
+                              className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${
+                                isBlocked
+                                  ? 'bg-red-500/15 border border-red-500/30 text-red-400'
+                                  : 'bg-emerald-500/15 border border-emerald-500/30 text-emerald-400'
+                              }`}
+                            >
+                              {isBlocked ? 'Blocked / Restricted' : 'Active'}
+                            </span>
+                          </div>
+
+                          <p className="text-xs text-slate-200 line-clamp-3 whitespace-pre-line mt-0.5">
+                            {post.content}
+                          </p>
+
+                          {post.media && post.media.length > 0 && (
+                            <div className="mt-1 flex items-center gap-2">
+                              {post.media.map((m: any, idx: number) => (
+                                <a
+                                  key={idx}
+                                  href={m.url}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="w-14 h-14 rounded-lg border border-[#1E293B] overflow-hidden relative group/img flex-shrink-0"
+                                >
+                                  <img
+                                    src={m.thumbnailUrl || m.url}
+                                    alt="Post media"
+                                    className="w-full h-full object-cover group-hover/img:scale-105 transition"
+                                  />
+                                </a>
+                              ))}
+                            </div>
+                          )}
+
+                          <div className="flex items-center gap-4 text-[11px] text-slate-400 mt-1">
+                            <span>❤️ {post._count?.likes || 0}</span>
+                            <span>💬 {post._count?.replies || 0}</span>
+                            <span>🔄 {post._count?.repostItems || 0}</span>
+                            <span className="text-slate-500">
+                              {new Date(post.createdAt).toLocaleDateString('en-IN', {
+                                month: 'short',
+                                day: 'numeric',
+                                hour: '2-digit',
+                                minute: '2-digit',
+                              })}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Post Moderation Actions */}
+                      <div className="flex items-center gap-2 self-end sm:self-center flex-shrink-0">
+                        <button
+                          onClick={() =>
+                            toggleBlockPostMutation.mutate({
+                              postId: post.id,
+                              reason: isBlocked
+                                ? `Unblocked by admin in group ${inspectingGroup.name}`
+                                : `Blocked / restricted by admin in group ${inspectingGroup.name}`,
+                            })
+                          }
+                          className={`px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 ${
+                            isBlocked
+                              ? 'bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/25'
+                              : 'bg-amber-500/15 border border-amber-500/30 text-amber-400 hover:bg-amber-500/25'
+                          }`}
+                        >
+                          {isBlocked ? (
+                            <>
+                              <Unlock size={13} />
+                              Unblock Post
+                            </>
+                          ) : (
+                            <>
+                              <Ban size={13} />
+                              Block / Restrict
+                            </>
+                          )}
+                        </button>
+
+                        <button
+                          onClick={() => {
+                            if (confirm(`Permanently delete this post from "${inspectingGroup.name}"?`)) {
+                              deletePostMutation.mutate(post.id);
+                            }
+                          }}
+                          className="p-1.5 rounded-xl bg-red-500/15 border border-red-500/30 text-red-400 hover:bg-red-500/25 transition"
+                          title="Delete Post"
+                        >
+                          <Trash2 size={15} />
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+
+            {/* Pagination & Footer */}
+            {groupPostsData?.totalPages > 1 && (
+              <div className="px-5 py-3 border-t border-[#1E293B] bg-[#101D2D]/40 flex items-center justify-between text-xs text-slate-400">
+                <span>
+                  Page {groupPostsData.page} of {groupPostsData.totalPages} ({groupPostsData.total} group posts)
+                </span>
+                <div className="flex items-center gap-2">
+                  <button
+                    disabled={inspectingGroupPage <= 1}
+                    onClick={() => setInspectingGroupPage((p) => Math.max(1, p - 1))}
+                    className="px-3 py-1.5 bg-[#101D2D] border border-[#1E293B] rounded-lg disabled:opacity-40 hover:bg-[#162538] text-slate-200"
+                  >
+                    <ChevronLeft size={14} />
+                  </button>
+                  <button
+                    disabled={inspectingGroupPage >= groupPostsData.totalPages}
+                    onClick={() => setInspectingGroupPage((p) => p + 1)}
+                    className="px-3 py-1.5 bg-[#101D2D] border border-[#1E293B] rounded-lg disabled:opacity-40 hover:bg-[#162538] text-slate-200"
+                  >
+                    <ChevronRight size={14} />
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* MODAL 1: CREATE POST IN GROUP */}
       {createPostModalOpen && (

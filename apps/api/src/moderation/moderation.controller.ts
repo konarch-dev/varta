@@ -235,6 +235,26 @@ export class ModerationController {
     return this.moderationService.createPostInGroup(id, admin.id, body);
   }
 
+  @Get('admin/groups/:id/posts')
+  @UseGuards(RolesGuard)
+  @Roles(Role.ADMIN, Role.MODERATOR)
+  @ApiOperation({ summary: 'Get posts belonging to a specific group' })
+  async getGroupPosts(
+    @Param('id') id: string,
+    @Query('search') search?: string,
+    @Query('isBlocked') isBlocked?: string,
+    @Query('page') page?: number,
+    @Query('limit') limit?: number,
+  ) {
+    return this.moderationService.getPostsList({
+      groupId: id,
+      search,
+      isBlocked,
+      page,
+      limit,
+    });
+  }
+
   @Delete('admin/groups/:id')
   @UseGuards(RolesGuard)
   @Roles(Role.ADMIN)
