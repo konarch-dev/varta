@@ -84,9 +84,9 @@ async function bootstrap() {
   });
 
   const port = process.env.PORT_API || process.env.PORT || 3001;
-  await app.listen(port);
-  logger.log(`🚀 VARTA Backend API running on: http://localhost:${port}/api/v1`);
-  logger.log(`📚 Swagger documentation available at: http://localhost:${port}/api/docs`);
+  await app.listen(port, '0.0.0.0');
+  logger.log(`🚀 VARTA Backend API running on: http://0.0.0.0:${port}/api/v1`);
+  logger.log(`📚 Swagger documentation available at: http://0.0.0.0:${port}/api/docs`);
 }
 
 bootstrap();
