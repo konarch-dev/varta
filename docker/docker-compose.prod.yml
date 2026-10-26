@@ -3,17 +3,20 @@ services:
     image: postgres:16-alpine
     container_name: varta-prod-postgres
     restart: always
+    env_file:
+      - ../.env
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-varta_user}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-varta_secure_password_123}
       POSTGRES_DB: ${POSTGRES_DB:-varta_db}
     volumes:
       - varta_prod_pgdata:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-varta_user} -d ${POSTGRES_DB:-varta_db}"]
-      interval: 10s
+      interval: 5s
       timeout: 5s
-      retries: 5
+      retries: 10
+      start_period: 15s
     deploy:
       resources:
         limits:
@@ -26,14 +29,27 @@ services:
     image: redis:7.2-alpine
     container_name: varta-prod-redis
     restart: always
-    command: ["redis-server", "--appendonly", "yes", "--requirepass", "${REDIS_PASSWORD:-}"]
+    env_file:
+      - ../.env
+    command: >
+      sh -c "if [ -n \"$${REDIS_PASSWORD}\" ]; then
+        redis-server --appendonly yes --requirepass \"$${REDIS_PASSWORD}\";
+      else
+        redis-server --appendonly yes;
+      fi"
     volumes:
       - varta_prod_redisdata:/data
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 10s
+      test: >
+        sh -c "if [ -n \"$${REDIS_PASSWORD}\" ]; then
+          redis-cli -a \"$${REDIS_PASSWORD}\" ping | grep PONG;
+        else
+          redis-cli ping | grep PONG;
+        fi"
+      interval: 5s
       timeout: 5s
-      retries: 5
+      retries: 10
+      start_period: 5s
     deploy:
       resources:
         limits:
@@ -70,9 +86,10 @@ services:
           cpus: "1.0"
     healthcheck:
       test: ["CMD", "wget", "--spider", "-q", "http://localhost:3001/api/v1/health"]
-      interval: 15s
+      interval: 10s
       timeout: 5s
-      retries: 3
+      retries: 6
+      start_period: 25s
     networks:
       - varta-prod-net
 
