@@ -44,6 +44,50 @@ export const LoginSchema = z.object({
 
 export type LoginDto = z.infer<typeof LoginSchema>;
 
+export const SendSignupOtpSchema = z.object({
+  email: z.string().email('Please enter a valid email address'),
+  displayName: z.string().min(1).max(DISPLAY_NAME_MAX_LENGTH).optional(),
+});
+
+export type SendSignupOtpDto = z.infer<typeof SendSignupOtpSchema>;
+
+export const VerifySignupOtpSchema = z.object({
+  email: z.string().email('Please enter a valid email address'),
+  username: z
+    .string()
+    .min(3, 'Username must be at least 3 characters')
+    .max(30, 'Username must not exceed 30 characters')
+    .regex(
+      USERNAME_REGEX,
+      'Username can only contain letters, numbers, and underscores',
+    )
+    .transform((val) => val.toLowerCase()),
+  displayName: z
+    .string()
+    .min(1, 'Display name is required')
+    .max(DISPLAY_NAME_MAX_LENGTH, `Display name must not exceed ${DISPLAY_NAME_MAX_LENGTH} characters`),
+  password: z
+    .string()
+    .min(PASSWORD_MIN_LENGTH, `Password must be at least ${PASSWORD_MIN_LENGTH} characters`)
+    .max(128, 'Password must not exceed 128 characters'),
+  otp: z.string().length(6, 'Verification code must be 6 digits'),
+});
+
+export type VerifySignupOtpDto = z.infer<typeof VerifySignupOtpSchema>;
+
+export const SendLoginOtpSchema = z.object({
+  identifier: z.string().min(1, 'Please enter your username or email'),
+});
+
+export type SendLoginOtpDto = z.infer<typeof SendLoginOtpSchema>;
+
+export const VerifyLoginOtpSchema = z.object({
+  identifier: z.string().min(1, 'Please enter your username or email'),
+  otp: z.string().length(6, 'Verification code must be 6 digits'),
+});
+
+export type VerifyLoginOtpDto = z.infer<typeof VerifyLoginOtpSchema>;
+
 export const UpdateProfileSchema = z.object({
   displayName: z.string().min(1).max(DISPLAY_NAME_MAX_LENGTH).optional(),
   bio: z.string().max(BIO_MAX_LENGTH).optional().nullable(),
@@ -126,3 +170,77 @@ export const SendMessageSchema = z.object({
 });
 
 export type SendMessageDto = z.infer<typeof SendMessageSchema>;
+
+export const GoogleAuthSchema = z.object({
+  email: z.string().email('Please enter a valid Google email address'),
+  displayName: z.string().min(1, 'Display name is required').max(DISPLAY_NAME_MAX_LENGTH),
+  avatarUrl: z.string().url().optional().nullable(),
+  googleId: z.string().optional(),
+  idToken: z.string().optional(),
+});
+
+export type GoogleAuthDto = z.infer<typeof GoogleAuthSchema>;
+
+export const SendPhoneOtpSchema = z.object({
+  countryCode: z.string().regex(/^\+[0-9]{1,4}$/, 'Invalid country code (e.g. +91)'),
+  phoneNumber: z
+    .string()
+    .min(6, 'Phone number must be at least 6 digits')
+    .max(15, 'Phone number cannot exceed 15 digits')
+    .regex(/^[0-9\s-]+$/, 'Phone number must contain only numbers'),
+  purpose: z.enum(['signup', 'login']),
+});
+
+export type SendPhoneOtpDto = z.infer<typeof SendPhoneOtpSchema>;
+
+export const VerifyPhoneSignupSchema = z.object({
+  countryCode: z.string().regex(/^\+[0-9]{1,4}$/, 'Invalid country code (e.g. +91)'),
+  phoneNumber: z
+    .string()
+    .min(6, 'Phone number must be at least 6 digits')
+    .max(15, 'Phone number cannot exceed 15 digits'),
+  displayName: z
+    .string()
+    .min(1, 'Display name is required')
+    .max(DISPLAY_NAME_MAX_LENGTH, `Display name must not exceed ${DISPLAY_NAME_MAX_LENGTH} characters`),
+  username: z
+    .string()
+    .min(3, 'Username must be at least 3 characters')
+    .max(30, 'Username must not exceed 30 characters')
+    .regex(
+      USERNAME_REGEX,
+      'Username can only contain letters, numbers, and underscores',
+    )
+    .transform((val) => val.toLowerCase()),
+  password: z
+    .string()
+    .min(PASSWORD_MIN_LENGTH, `Password must be at least ${PASSWORD_MIN_LENGTH} characters`)
+    .max(128, 'Password must not exceed 128 characters'),
+  otp: z.string().length(6, 'Verification code must be 6 digits'),
+});
+
+export type VerifyPhoneSignupDto = z.infer<typeof VerifyPhoneSignupSchema>;
+
+export const VerifyPhoneLoginSchema = z.object({
+  countryCode: z.string().regex(/^\+[0-9]{1,4}$/, 'Invalid country code (e.g. +91)'),
+  phoneNumber: z
+    .string()
+    .min(6, 'Phone number must be at least 6 digits')
+    .max(15, 'Phone number cannot exceed 15 digits'),
+  otp: z.string().length(6, 'Verification code must be 6 digits'),
+});
+
+export type VerifyPhoneLoginDto = z.infer<typeof VerifyPhoneLoginSchema>;
+
+export const PhonePasswordLoginSchema = z.object({
+  countryCode: z.string().regex(/^\+[0-9]{1,4}$/, 'Invalid country code (e.g. +91)'),
+  phoneNumber: z
+    .string()
+    .min(6, 'Phone number must be at least 6 digits')
+    .max(15, 'Phone number cannot exceed 15 digits'),
+  password: z.string().min(1, 'Password is required'),
+});
+
+export type PhonePasswordLoginDto = z.infer<typeof PhonePasswordLoginSchema>;
+
+

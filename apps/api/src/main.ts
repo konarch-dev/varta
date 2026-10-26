@@ -49,9 +49,11 @@ async function bootstrap() {
   const avatarsDir = path.join(uploadDir, 'avatars');
   const coversDir = path.join(uploadDir, 'covers');
   const postsDir = path.join(uploadDir, 'posts');
+  const groupsDir = path.join(uploadDir, 'groups');
   if (!fs.existsSync(avatarsDir)) fs.mkdirSync(avatarsDir, { recursive: true });
   if (!fs.existsSync(coversDir)) fs.mkdirSync(coversDir, { recursive: true });
   if (!fs.existsSync(postsDir)) fs.mkdirSync(postsDir, { recursive: true });
+  if (!fs.existsSync(groupsDir)) fs.mkdirSync(groupsDir, { recursive: true });
 
   app.use('/uploads', express.static(uploadDir));
   app.use('/api/v1/uploads', express.static(uploadDir));

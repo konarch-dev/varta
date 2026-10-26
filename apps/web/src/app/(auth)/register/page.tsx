@@ -8,13 +8,18 @@ import {
   AtSign,
   Mail,
   Lock,
+  KeyRound,
   Eye,
   EyeOff,
   Smartphone,
   Loader2,
   AlertCircle,
   MailCheck,
+  CheckCircle2,
+  ArrowLeft,
   ArrowRight,
+  RefreshCw,
+  Sparkles,
   MessageSquare,
   MessageCircle,
   MapPin,
@@ -29,6 +34,8 @@ import {
 } from 'lucide-react';
 import { VartaLogo } from '../../../components/common/VartaLogo';
 import { useAuthStore } from '../../../stores/authStore';
+import { GoogleAuthModal } from '../../../components/auth/GoogleAuthModal';
+import { CountryCodeSelector, Country } from '../../../components/auth/CountryCodeSelector';
 
 // Google 4-Color Vector Icon
 const GoogleIcon = ({ className = 'w-5 h-5' }: { className?: string }) => (
@@ -61,17 +68,62 @@ const AppleIcon = ({ className = 'w-5 h-5' }: { className?: string }) => (
 
 export default function RegisterPage() {
   const router = useRouter();
-  const { register: registerAuth, isLoading } = useAuthStore();
+  const {
+    sendSignupOtp,
+    verifySignupOtp,
+    sendPhoneOtp,
+    verifyPhoneSignup,
+    isLoading,
+  } = useAuthStore();
 
+  const [regMethod, setRegMethod] = useState<'phone' | 'email'>('phone');
   const [fullName, setFullName] = useState('');
   const [username, setUsername] = useState('');
-  const [emailOrPhone, setEmailOrPhone] = useState('');
+  const [email, setEmail] = useState('');
+  const [phoneCountryCode, setPhoneCountryCode] = useState('+91');
+  const [phoneNumber, setPhoneNumber] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [isGoogleModalOpen, setIsGoogleModalOpen] = useState(false);
 
-  const [isRegisteredSuccess, setIsRegisteredSuccess] = useState(false);
-  const [registeredEmail, setRegisteredEmail] = useState('');
+  // OTP Registration Flow State
+  const [regStep, setRegStep] = useState<'form' | 'otp'>('form');
+  const [registeredIdentifier, setRegisteredIdentifier] = useState('');
+  const [otpCode, setOtpCode] = useState('');
+  const [otpTimer, setOtpTimer] = useState(0);
+  const [isSendingOtp, setIsSendingOtp] = useState(false);
+  const [isVerifyingOtp, setIsVerifyingOtp] = useState(false);
+
+  // Countdown timer for OTP resend
+  React.useEffect(() => {
+    if (otpTimer <= 0) return;
+    const interval = setInterval(() => {
+      setOtpTimer((prev) => (prev > 0 ? prev - 1 : 0));
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [otpTimer]);
+
+  // Google OAuth redirect notification handling
+  React.useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('google_oauth') === 'not_configured') {
+      setIsGoogleModalOpen(true);
+      setErrorMessage(
+        'Google OAuth keys (GOOGLE_CLIENT_ID & SECRET) are not yet configured in .env. You can sign up below using your Google profile or add credentials to .env.'
+      );
+    }
+    const err = params.get('error');
+    if (err) {
+      setErrorMessage(decodeURIComponent(err));
+    }
+  }, []);
+
+  const handleGoogleOAuth = () => {
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api/v1';
+    window.location.href = `${apiUrl}/auth/google/login`;
+  };
 
   // Sample interactive post state
   const [liked, setLiked] = useState(false);
@@ -99,35 +151,113 @@ export default function RegisterPage() {
     }
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSendSignupOtp = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMessage(null);
 
-    if (!fullName.trim() || !username.trim() || !emailOrPhone.trim() || !password) {
+    if (!fullName.trim() || !username.trim() || !password) {
       setErrorMessage('Please fill in all registration fields');
       return;
     }
 
-    const emailToUse = emailOrPhone.includes('@')
-      ? emailOrPhone.trim()
-      : `${emailOrPhone.replace(/\D/g, '')}@phone.varta.in`;
+    if (password.length < 8) {
+      setErrorMessage('Password must be at least 8 characters long');
+      return;
+    }
 
+    setIsSendingOtp(true);
     try {
-      const res = await registerAuth({
-        displayName: fullName.trim(),
-        username: username.trim().toLowerCase(),
-        email: emailToUse,
-        password,
-      });
-
-      if (res?.requiresVerification) {
-        setIsRegisteredSuccess(true);
-        setRegisteredEmail(emailToUse);
+      if (regMethod === 'phone') {
+        const cleanDigits = phoneNumber.replace(/\D/g, '');
+        if (cleanDigits.length < 6) {
+          setErrorMessage('Please enter a valid phone number');
+          setIsSendingOtp(false);
+          return;
+        }
+        await sendPhoneOtp({
+          countryCode: phoneCountryCode,
+          phoneNumber: cleanDigits,
+          purpose: 'signup',
+        });
+        setRegisteredIdentifier(`${phoneCountryCode} ${phoneNumber}`);
+        setRegStep('otp');
+        setOtpTimer(60);
+        setOtpCode('');
       } else {
-        router.push('/home');
+        if (!email.trim() || !email.includes('@')) {
+          setErrorMessage('Please provide a valid email address');
+          setIsSendingOtp(false);
+          return;
+        }
+        await sendSignupOtp(email.trim().toLowerCase(), fullName.trim());
+        setRegisteredIdentifier(email.trim().toLowerCase());
+        setRegStep('otp');
+        setOtpTimer(60);
+        setOtpCode('');
       }
     } catch (err: any) {
-      setErrorMessage(err.message || 'Registration failed');
+      setErrorMessage(err.message || 'Failed to dispatch registration OTP');
+    } finally {
+      setIsSendingOtp(false);
+    }
+  };
+
+  const handleVerifySignupOtp = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setErrorMessage(null);
+
+    if (!otpCode.trim() || otpCode.trim().length !== 6) {
+      setErrorMessage('Please enter the complete 6-digit OTP code');
+      return;
+    }
+
+    setIsVerifyingOtp(true);
+    try {
+      if (regMethod === 'phone') {
+        await verifyPhoneSignup({
+          countryCode: phoneCountryCode,
+          phoneNumber: phoneNumber.replace(/\D/g, ''),
+          displayName: fullName.trim(),
+          username: username.trim().toLowerCase(),
+          password,
+          otp: otpCode.trim(),
+        });
+      } else {
+        await verifySignupOtp({
+          email: registeredIdentifier,
+          username: username.trim().toLowerCase(),
+          displayName: fullName.trim(),
+          password,
+          otp: otpCode.trim(),
+        });
+      }
+      router.push('/home');
+    } catch (err: any) {
+      setErrorMessage(err.message || 'OTP verification failed. Please try again.');
+    } finally {
+      setIsVerifyingOtp(false);
+    }
+  };
+
+  const handleResendSignupOtp = async () => {
+    if (otpTimer > 0 || isSendingOtp) return;
+    setErrorMessage(null);
+    setIsSendingOtp(true);
+    try {
+      if (regMethod === 'phone') {
+        await sendPhoneOtp({
+          countryCode: phoneCountryCode,
+          phoneNumber: phoneNumber.replace(/\D/g, ''),
+          purpose: 'signup',
+        });
+      } else {
+        await sendSignupOtp(registeredIdentifier, fullName.trim());
+      }
+      setOtpTimer(60);
+    } catch (err: any) {
+      setErrorMessage(err.message || 'Failed to resend verification OTP');
+    } finally {
+      setIsSendingOtp(false);
     }
   };
 
@@ -422,64 +552,19 @@ export default function RegisterPage() {
           {/* RIGHT / CENTER FLOATING REGISTER CARD */}
           <div className="lg:col-span-5 flex justify-center lg:justify-end w-full">
             <div className="w-full max-w-[390px] sm:max-w-[430px] rounded-[28px] sm:rounded-[32px] bg-white p-5 sm:p-8 shadow-[0_20px_60px_-15px_rgba(0,0,0,0.18)] border border-slate-100 flex flex-col gap-4">
-              {isRegisteredSuccess ? (
-                /* Email Confirmation Success State */
-                <div className="flex flex-col items-center text-center gap-4 py-2 animate-in fade-in duration-300">
-                  <div className="w-16 h-16 rounded-full bg-[#FF7A00]/15 border border-[#FF7A00]/30 flex items-center justify-center text-[#FF5722] shadow-lg shadow-[#FF5722]/20">
-                    <MailCheck size={34} />
-                  </div>
-                  <div className="flex flex-col">
+              {regStep === 'otp' ? (
+                /* STEP 2: 6-DIGIT OTP VERIFICATION SCREEN */
+                <form onSubmit={handleVerifySignupOtp} className="flex flex-col gap-4 animate-in fade-in duration-300">
+                  <div className="flex flex-col items-center text-center gap-2">
+                    <div className="w-14 h-14 rounded-full bg-orange-50 border border-orange-200 flex items-center justify-center text-[#FF5722] shadow-md shadow-orange-500/10">
+                      <ShieldCheck size={28} />
+                    </div>
                     <h2 className="text-2xl font-black text-[#0B1422] tracking-tight">
-                      Check Your Email
+                      Verify Your Account
                     </h2>
-                    <p className="text-xs sm:text-sm text-slate-500 font-medium mt-1">
-                      Account activation required
-                    </p>
-                  </div>
-
-                  <p className="text-sm text-slate-600 leading-relaxed">
-                    We have dispatched an activation link to{' '}
-                    <strong className="text-slate-900">{registeredEmail}</strong>.
-                  </p>
-
-                  <div className="text-xs text-slate-600 leading-relaxed bg-[#F8FAFC] border border-slate-200 rounded-2xl p-3.5 text-left w-full">
-                    <p className="font-bold text-slate-900 mb-1">Quick Steps:</p>
-                    <ul className="list-disc pl-4 space-y-1 text-slate-600">
-                      <li>Open your email inbox (or spam folder).</li>
-                      <li>Click the <strong>Activate My Account</strong> link.</li>
-                      <li>Your account will be activated instantly!</li>
-                    </ul>
-                  </div>
-
-                  <Link
-                    href="/login"
-                    style={{ color: '#FFFFFF' }}
-                    className="w-full mt-2 py-3.5 rounded-2xl bg-[#FF5722] hover:bg-[#E64A19] text-white text-force-white font-extrabold text-sm shadow-lg shadow-orange-500/25 active:scale-[0.99] transition flex items-center justify-center gap-2"
-                  >
-                    <span style={{ color: '#FFFFFF' }} className="text-white text-force-white font-extrabold">
-                      Proceed to Sign In
-                    </span>
-                    <ArrowRight size={18} className="text-white text-force-white" />
-                  </Link>
-
-                  <button
-                    type="button"
-                    onClick={() => setIsRegisteredSuccess(false)}
-                    className="text-xs text-slate-500 hover:text-slate-800 font-semibold mt-1 transition"
-                  >
-                    Register with a different email
-                  </button>
-                </div>
-              ) : (
-                /* Registration Form */
-                <>
-                  {/* Card Header Title */}
-                  <div className="flex flex-col">
-                    <h2 className="text-2xl sm:text-[28px] font-black text-[#0B1422] tracking-tight">
-                      Create Account
-                    </h2>
-                    <p className="text-xs sm:text-sm text-slate-500 font-medium mt-0.5 sm:mt-1">
-                      Join India&apos;s growing social community
+                    <p className="text-xs text-slate-500 font-medium">
+                      Enter the 6-digit OTP code sent to{' '}
+                      <strong className="text-slate-900 font-bold">{registeredIdentifier}</strong>
                     </p>
                   </div>
 
@@ -491,8 +576,128 @@ export default function RegisterPage() {
                     </div>
                   )}
 
+                  {/* 6-digit numeric input */}
+                  <div className="flex flex-col gap-1">
+                    <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider text-center">
+                      6-Digit Security Code
+                    </label>
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      pattern="[0-9]*"
+                      maxLength={6}
+                      value={otpCode}
+                      onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                      placeholder="••••••"
+                      autoFocus
+                      autoComplete="one-time-code"
+                      className="w-full text-center font-mono text-2xl font-black tracking-[0.4em] py-3.5 bg-[#F8FAFC] border border-[#E2E8F0] focus:border-[#FF5722] focus:bg-white focus:ring-2 focus:ring-[#FF5722]/15 rounded-2xl transition outline-none text-[#0B1422] placeholder:tracking-[0.3em] placeholder:text-slate-300"
+                    />
+                  </div>
+
+                  <button
+                    type="submit"
+                    disabled={isVerifyingOtp || otpCode.length !== 6}
+                    style={{ color: '#FFFFFF' }}
+                    className="w-full py-3.5 rounded-2xl bg-[#FF5722] hover:bg-[#E64A19] active:scale-[0.99] text-white text-force-white font-extrabold text-sm sm:text-base shadow-lg shadow-orange-500/30 transition flex items-center justify-center gap-2 cursor-pointer disabled:opacity-60"
+                  >
+                    {isVerifyingOtp ? (
+                      <Loader2 size={18} className="animate-spin text-white" />
+                    ) : (
+                      <span style={{ color: '#FFFFFF' }} className="text-white text-force-white font-extrabold">
+                        Verify & Complete Registration
+                      </span>
+                    )}
+                  </button>
+
+                  <div className="flex items-center justify-between pt-1 text-xs">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setRegStep('form');
+                        setOtpCode('');
+                        setErrorMessage(null);
+                      }}
+                      className="text-slate-500 hover:text-slate-800 font-semibold flex items-center gap-1 cursor-pointer"
+                    >
+                      <ArrowLeft size={13} />
+                      <span>Edit details</span>
+                    </button>
+
+                    {otpTimer > 0 ? (
+                      <span className="text-slate-400 font-medium">
+                        Resend in {otpTimer}s
+                      </span>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={handleResendSignupOtp}
+                        disabled={isSendingOtp}
+                        className="text-[#0284C7] hover:underline font-bold flex items-center gap-1 cursor-pointer"
+                      >
+                        <RefreshCw size={12} className={isSendingOtp ? 'animate-spin' : ''} />
+                        <span>Resend OTP</span>
+                      </button>
+                    )}
+                  </div>
+                </form>
+              ) : (
+                /* STEP 1: INITIAL REGISTRATION FORM */
+                <>
+                  {/* Card Header Title */}
+                  <div className="flex flex-col">
+                    <h2 className="text-2xl sm:text-[28px] font-black text-[#0B1422] tracking-tight">
+                      Create Account
+                    </h2>
+                    <p className="text-xs sm:text-sm text-slate-500 font-medium mt-0.5 sm:mt-1">
+                      Join India&apos;s growing social community
+                    </p>
+                  </div>
+
+                  {/* Registration Method Toggle: Phone vs Email */}
+                  <div className="grid grid-cols-2 gap-1 p-1 bg-slate-100 rounded-2xl">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setRegMethod('phone');
+                        setErrorMessage(null);
+                      }}
+                      className={`py-2 px-3 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer ${
+                        regMethod === 'phone'
+                          ? 'bg-white text-[#0B1422] shadow-xs'
+                          : 'text-slate-500 hover:text-slate-800'
+                      }`}
+                    >
+                      <Smartphone size={14} className={regMethod === 'phone' ? 'text-[#FF5722]' : ''} />
+                      <span>Phone Number</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setRegMethod('email');
+                        setErrorMessage(null);
+                      }}
+                      className={`py-2 px-3 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer ${
+                        regMethod === 'email'
+                          ? 'bg-white text-[#0B1422] shadow-xs'
+                          : 'text-slate-500 hover:text-slate-800'
+                      }`}
+                    >
+                      <Mail size={14} className={regMethod === 'email' ? 'text-[#FF5722]' : ''} />
+                      <span>Email Address</span>
+                    </button>
+                  </div>
+
+                  {/* Error Feedback Alert */}
+                  {errorMessage && (
+                    <div className="p-3 bg-rose-50 border border-rose-200 rounded-2xl flex items-center gap-2 text-xs text-rose-700 animate-in fade-in duration-200">
+                      <AlertCircle size={15} className="shrink-0 text-rose-600" />
+                      <span className="font-semibold">{errorMessage}</span>
+                    </div>
+                  )}
+
                   {/* Register Form */}
-                  <form onSubmit={handleSubmit} className="flex flex-col gap-2.5 sm:gap-3">
+                  <form onSubmit={handleSendSignupOtp} className="flex flex-col gap-2.5 sm:gap-3">
                     {/* Full Name */}
                     <div className="flex flex-col gap-1">
                       <div className="relative flex items-center bg-[#F8FAFC] border border-[#E2E8F0] focus-within:border-[#FF5722] focus-within:bg-white focus-within:ring-2 focus-within:ring-[#FF5722]/15 rounded-2xl px-3.5 sm:px-4 py-2.5 sm:py-3 transition shadow-2xs">
@@ -525,21 +730,48 @@ export default function RegisterPage() {
                       </div>
                     </div>
 
-                    {/* Email or Phone */}
-                    <div className="flex flex-col gap-1">
-                      <div className="relative flex items-center bg-[#F8FAFC] border border-[#E2E8F0] focus-within:border-[#FF5722] focus-within:bg-white focus-within:ring-2 focus-within:ring-[#FF5722]/15 rounded-2xl px-3.5 sm:px-4 py-2.5 sm:py-3 transition shadow-2xs">
-                        <Mail size={17} className="text-slate-400 shrink-0 mr-3" />
-                        <input
-                          type="text"
-                          value={emailOrPhone}
-                          onChange={(e) => setEmailOrPhone(e.target.value)}
-                          placeholder="Email or Phone Number"
-                          autoComplete="email"
-                          suppressHydrationWarning
-                          className="bg-transparent text-sm text-[#0B1422] placeholder-slate-400 outline-none w-full font-medium"
-                        />
+                    {/* Phone or Email Input based on regMethod */}
+                    {regMethod === 'phone' ? (
+                      <div className="flex flex-col gap-1">
+                        <label className="text-[11px] font-bold text-slate-600">
+                          Country Code & Phone Number
+                        </label>
+                        <div className="relative flex items-center bg-[#F8FAFC] border border-[#E2E8F0] focus-within:border-[#FF5722] focus-within:bg-white focus-within:ring-2 focus-within:ring-[#FF5722]/15 rounded-2xl overflow-hidden transition shadow-2xs">
+                          <CountryCodeSelector
+                            selectedCode={phoneCountryCode}
+                            onSelect={(c) => setPhoneCountryCode(c.code)}
+                          />
+                          <input
+                            type="tel"
+                            value={phoneNumber}
+                            onChange={(e) =>
+                              setPhoneNumber(e.target.value.replace(/[^0-9\s-]/g, ''))
+                            }
+                            placeholder="98765 43210"
+                            autoComplete="tel"
+                            autoFocus
+                            suppressHydrationWarning
+                            className="bg-transparent text-sm text-[#0B1422] placeholder-slate-400 outline-none w-full font-medium px-3 py-2.5 sm:py-3"
+                          />
+                        </div>
                       </div>
-                    </div>
+                    ) : (
+                      <div className="flex flex-col gap-1">
+                        <div className="relative flex items-center bg-[#F8FAFC] border border-[#E2E8F0] focus-within:border-[#FF5722] focus-within:bg-white focus-within:ring-2 focus-within:ring-[#FF5722]/15 rounded-2xl px-3.5 sm:px-4 py-2.5 sm:py-3 transition shadow-2xs">
+                          <Mail size={17} className="text-slate-400 shrink-0 mr-3" />
+                          <input
+                            type="email"
+                            value={email}
+                            onChange={(e) => setEmail(e.target.value)}
+                            placeholder="Email Address"
+                            autoComplete="email"
+                            autoFocus
+                            suppressHydrationWarning
+                            className="bg-transparent text-sm text-[#0B1422] placeholder-slate-400 outline-none w-full font-medium"
+                          />
+                        </div>
+                      </div>
+                    )}
 
                     {/* Password */}
                     <div className="flex flex-col gap-1">
@@ -568,15 +800,15 @@ export default function RegisterPage() {
                     {/* Submit Button */}
                     <button
                       type="submit"
-                      disabled={isLoading}
+                      disabled={isSendingOtp}
                       style={{ color: '#FFFFFF' }}
                       className="w-full py-3 sm:py-3.5 rounded-2xl bg-[#FF5722] hover:bg-[#E64A19] active:scale-[0.99] text-white text-force-white font-extrabold text-sm sm:text-base shadow-lg shadow-orange-500/30 transition flex items-center justify-center gap-2 mt-1 cursor-pointer disabled:opacity-60"
                     >
-                      {isLoading ? (
+                      {isSendingOtp ? (
                         <Loader2 size={18} className="animate-spin text-white" />
                       ) : (
                         <span style={{ color: '#FFFFFF' }} className="text-white text-force-white font-extrabold">
-                          Create Account
+                          Send 6-Digit OTP
                         </span>
                       )}
                     </button>
@@ -595,12 +827,8 @@ export default function RegisterPage() {
                   <div className="grid grid-cols-3 gap-2.5 sm:gap-3">
                     <button
                       type="button"
-                      onClick={() =>
-                        setErrorMessage(
-                          'Google signup simulated for layout demo. Use the registration form above.'
-                        )
-                      }
-                      className="h-11 sm:h-12 rounded-2xl bg-white hover:bg-slate-50 border border-slate-200/90 flex items-center justify-center transition active:scale-95 shadow-2xs"
+                      onClick={handleGoogleOAuth}
+                      className="h-11 sm:h-12 rounded-2xl bg-white hover:bg-slate-50 border border-slate-200/90 hover:border-slate-300 flex items-center justify-center transition active:scale-95 shadow-2xs cursor-pointer"
                       title="Sign up with Google"
                     >
                       <GoogleIcon className="w-5 h-5" />
@@ -621,11 +849,12 @@ export default function RegisterPage() {
 
                     <button
                       type="button"
-                      onClick={() =>
-                        setErrorMessage(
-                          'Phone signup simulated for layout demo. Use the registration form above.'
-                        )
-                      }
+                      onClick={() => {
+                        const emailInput = document.querySelector<HTMLInputElement>(
+                          'input[autoComplete="email"]'
+                        );
+                        if (emailInput) emailInput.focus();
+                      }}
                       className="h-11 sm:h-12 rounded-2xl bg-white hover:bg-slate-50 border border-slate-200/90 flex items-center justify-center text-slate-700 hover:text-black transition active:scale-95 shadow-2xs"
                       title="Sign up with Phone / OTP"
                     >
@@ -665,6 +894,13 @@ export default function RegisterPage() {
           </div>
         </footer>
       </div>
+
+      {/* Google Sign-Up Modal */}
+      <GoogleAuthModal
+        isOpen={isGoogleModalOpen}
+        onClose={() => setIsGoogleModalOpen(false)}
+        title="Sign up with Google"
+      />
     </div>
   );
 }

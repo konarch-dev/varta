@@ -302,6 +302,20 @@ html.light [class*="bg-sky-100"] * {
   color: #0369A1 !important;
 }
 
+/* 2b. Community category pill badge high-contrast styling */
+.community-category-badge {
+  background-color: rgba(255, 153, 51, 0.15) !important;
+  border: 1px solid rgba(255, 153, 51, 0.35) !important;
+  color: #FF9933 !important;
+}
+
+html.light .community-category-badge,
+html.light .community-category-badge * {
+  background-color: #FFF7ED !important;
+  border-color: #FED7AA !important;
+  color: #C2410C !important;
+}
+
 /* 3. Re-assert solid buttons ALWAYS retain white text over tinted rules */
 html.light button.bg-\[\#FF9933\],
 html.light button.bg-\[\#FF9933\] *,

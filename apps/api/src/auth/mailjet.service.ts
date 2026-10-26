@@ -326,4 +326,159 @@ export class MailjetService {
       return false;
     }
   }
+
+  async sendOtpEmail(
+    toEmail: string,
+    displayName: string,
+    otp: string,
+    purpose: 'login' | 'signup',
+  ): Promise<boolean> {
+    const fromEmail = this.configService.get<string>(
+      'MAIL_FROM_ADDRESS',
+      'konarch@patterns247.net',
+    );
+    const fromName = this.configService.get<string>(
+      'MAIL_FROM_NAME',
+      'VARTA — Baat Sabki',
+    );
+    const isSandbox =
+      this.configService.get<string>('MAILJET_SANDBOX', 'false') === 'true';
+
+    const title = purpose === 'signup' ? 'Verify Your Email Address' : 'Your Sign In Code';
+    const subject =
+      purpose === 'signup'
+        ? `${otp} is your VARTA registration verification code`
+        : `${otp} is your VARTA sign in code`;
+    const actionDesc =
+      purpose === 'signup'
+        ? 'complete your account registration and activate your profile on VARTA'
+        : 'sign in to your VARTA account without a password';
+
+    const htmlContent = `
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>${title}</title>
+</head>
+<body style="margin: 0; padding: 0; background-color: #050B14; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color: #F8FAFC;">
+  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="background-color: #050B14; padding: 40px 15px;">
+    <tr>
+      <td align="center">
+        <table role="presentation" width="100%" max-width="600" cellspacing="0" cellpadding="0" border="0" style="max-width: 580px; background-color: #0B1422; border: 1px solid #1E293B; border-radius: 24px; overflow: hidden; box-shadow: 0 20px 40px rgba(0,0,0,0.6);">
+          <tr>
+            <td style="height: 5px; background: linear-gradient(90deg, #FF9933 0%, #FFFFFF 50%, #00C853 100%);"></td>
+          </tr>
+          <tr>
+            <td style="padding: 36px 40px 20px 40px; text-align: center;">
+              <h1 style="margin: 0; font-size: 28px; font-weight: 900; letter-spacing: 1px; color: #FFFFFF;">
+                VARTA
+              </h1>
+              <div style="margin-top: 6px; font-size: 11px; font-weight: 700; color: #94A3B8; letter-spacing: 2px; text-transform: uppercase;">
+                <span style="color: #FF9933;">—</span> Baat Sabki <span style="color: #00C853;">—</span>
+              </div>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding: 0 40px;">
+              <div style="height: 1px; background-color: #1E293B;"></div>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding: 32px 40px;">
+              <h2 style="margin: 0 0 16px 0; font-size: 22px; font-weight: 800; color: #FFFFFF;">
+                ${title}
+              </h2>
+              <p style="margin: 0 0 16px 0; font-size: 15px; line-height: 1.6; color: #CBD5E1;">
+                Namaste <strong style="color: #FFFFFF;">${displayName || 'User'}</strong>,
+              </p>
+              <p style="margin: 0 0 24px 0; font-size: 15px; line-height: 1.6; color: #94A3B8;">
+                Use the following 6-digit one-time password (OTP) to ${actionDesc}:
+              </p>
+
+              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="margin: 28px 0;">
+                <tr>
+                  <td align="center">
+                    <div style="display: inline-block; background-color: #101D2D; border: 2px dashed #FF9933; border-radius: 16px; padding: 20px 36px; font-size: 38px; font-weight: 900; letter-spacing: 12px; color: #FF9933; font-family: 'Courier New', Courier, monospace; box-shadow: 0 10px 30px rgba(255, 153, 51, 0.15);">
+                      ${otp}
+                    </div>
+                  </td>
+                </tr>
+              </table>
+
+              <div style="background-color: #101D2D; border: 1px solid #1E293B; border-radius: 12px; padding: 16px; margin-bottom: 24px;">
+                <p style="margin: 0 0 6px 0; font-size: 12px; color: #94A3B8;">
+                  ⏱️ <strong>Valid for 10 minutes.</strong> Never share this code with anyone.
+                </p>
+                <p style="margin: 0; font-size: 11px; color: #64748B;">
+                  VARTA administrators and staff will never ask you for your verification code.
+                </p>
+              </div>
+
+              <p style="margin: 0; font-size: 13px; color: #64748B; line-height: 1.5;">
+                If you did not request this code, please ignore this email. No changes have been made to your account.
+              </p>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding: 24px 40px; background-color: #070E18; border-top: 1px solid #1E293B; text-align: center;">
+              <p style="margin: 0; font-size: 11px; color: #475569;">
+                © 2026 VARTA — Baat Sabki. Made with ❤️ for India.
+              </p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>
+    `;
+
+    const payload = {
+      Messages: [
+        {
+          From: {
+            Email: fromEmail,
+            Name: fromName,
+          },
+          To: [
+            {
+              Email: toEmail,
+              Name: displayName || 'Varta User',
+            },
+          ],
+          Subject: subject,
+          HTMLPart: htmlContent,
+          CustomID: `VartaOTP-${purpose}`,
+          SandboxMode: isSandbox,
+        },
+      ],
+    };
+
+    try {
+      this.logger.log(`Dispatching Mailjet OTP email to ${toEmail} (${purpose})...`);
+      const response = await fetch('https://api.mailjet.com/v3.1/send', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: this.getAuthHeader(),
+        },
+        body: JSON.stringify(payload),
+      });
+
+      const data: any = await response.json();
+      if (!response.ok) {
+        this.logger.error(`Mailjet OTP API Error (${response.status}): ${JSON.stringify(data)}`);
+        return false;
+      }
+
+      this.logger.log(`Mailjet OTP email delivered successfully to ${toEmail}`);
+      return true;
+    } catch (err: any) {
+      this.logger.error(`Failed to send OTP email via Mailjet: ${err.message}`, err.stack);
+      return false;
+    }
+  }
 }

@@ -8,7 +8,16 @@ export const metadata: Metadata = {
   keywords: ['Varta', 'Baat Sabki', 'Social Network', 'India Microblogging', 'Discourse', 'Communities'],
   authors: [{ name: 'VARTA' }],
   icons: {
-    icon: '/favicon.ico',
+    icon: [
+      { url: '/favicon.ico?v=2', sizes: 'any' },
+      { url: '/icon.png?v=2', type: 'image/png', sizes: '32x32' },
+      { url: '/icon-192.png?v=2', type: 'image/png', sizes: '192x192' },
+      { url: '/icon-512.png?v=2', type: 'image/png', sizes: '512x512' },
+    ],
+    apple: [
+      { url: '/apple-icon.png?v=2', sizes: '180x180', type: 'image/png' },
+    ],
+    shortcut: '/favicon.ico?v=2',
   },
 };
 

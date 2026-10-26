@@ -42,3 +42,6 @@ pnpm-debug.log*
 *.swo
 .DS_Store
 Thumbs.db
+
+# Temporary scratch scripts
+scratch/

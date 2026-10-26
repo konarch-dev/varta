@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Query, Param, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Body, Query, Param, UseGuards } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiQuery } from '@nestjs/swagger';
 import { ExploreService } from './explore.service';
 import { OptionalJwtAuthGuard } from '../auth/guards/optional-jwt-auth.guard';
@@ -88,6 +88,24 @@ export class ExploreController {
       limit ? Number(limit) : 50,
       cursor,
     );
+  }
+
+  @Post('communities')
+  @UseGuards(JwtAuthGuard)
+  @ApiOperation({ summary: 'Create a new community group (admin or regular user)' })
+  async createCommunity(
+    @CurrentUser() user: any,
+    @Body()
+    body: {
+      name: string;
+      description?: string;
+      category?: string;
+      avatarUrl?: string;
+      coverUrl?: string;
+      isPrivate?: boolean;
+    },
+  ) {
+    return this.exploreService.createCommunity(user.id, body);
   }
 
   @Post('communities/:id/join')

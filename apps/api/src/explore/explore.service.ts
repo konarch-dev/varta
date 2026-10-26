@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../database/prisma.service';
 import { PostsService } from '../posts/posts.service';
 
@@ -463,6 +463,80 @@ export class ExploreService {
       items: formattedItems,
       nextCursor,
       hasMore,
+    };
+  }
+
+  private slugify(name: string): string {
+    const base = name
+      .toLowerCase()
+      .trim()
+      .replace(/[^\w\s-]/g, '')
+      .replace(/[\s_-]+/g, '-')
+      .replace(/^-+|-+$/g, '');
+    return base || 'community';
+  }
+
+  async createCommunity(
+    userId: string,
+    dto: {
+      name: string;
+      description?: string;
+      category?: string;
+      avatarUrl?: string;
+      coverUrl?: string;
+      isPrivate?: boolean;
+    },
+  ) {
+    const cleanName = (dto.name || '').trim();
+    if (!cleanName || cleanName.length < 2) {
+      throw new BadRequestException('Community name must be at least 2 characters long');
+    }
+
+    let slug = this.slugify(cleanName);
+    const existing = await (this.prisma as any).group.findUnique({
+      where: { slug },
+    });
+    if (existing) {
+      slug = `${slug}-${Math.random().toString(36).substring(2, 6)}`;
+    }
+
+    const group = await this.prisma.$transaction(async (tx) => {
+      const g = await (tx as any).group.create({
+        data: {
+          name: cleanName,
+          slug,
+          description: dto.description?.trim() || null,
+          category: dto.category?.trim() || 'General',
+          avatarUrl: dto.avatarUrl?.trim() || null,
+          coverUrl: dto.coverUrl?.trim() || null,
+          isPrivate: dto.isPrivate ?? false,
+          creatorId: userId,
+          memberCount: 1,
+          postCount: 0,
+          members: {
+            create: {
+              userId,
+              role: 'ADMIN',
+            },
+          },
+        },
+      });
+      return g;
+    });
+
+    await this.prisma.auditLog.create({
+      data: {
+        actorId: userId,
+        action: 'CREATE_GROUP',
+        entity: 'Group',
+        entityId: group.id,
+        details: `User created community group "${group.name}" (/g/${group.slug})`,
+      },
+    });
+
+    return {
+      ...group,
+      isJoined: true,
     };
   }
 }
