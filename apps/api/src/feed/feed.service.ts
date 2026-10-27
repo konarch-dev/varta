@@ -64,7 +64,7 @@ export class FeedService {
       FROM "Post" p
       WHERE p."parentId" IS NULL
         AND p."deletedAt" IS NULL
-        AND p."authorId" IN (${Prisma.join(eligibleAuthorIds)})
+        AND p."authorId" IN (${(Prisma as any).join(eligibleAuthorIds)})
       ORDER BY
         ROUND(
           CAST(
@@ -185,30 +185,30 @@ export class FeedService {
       offset = parseInt(cursor, 10);
     }
 
-    const conditions: Prisma.Sql[] = [
-      Prisma.sql`p."parentId" IS NULL`,
-      Prisma.sql`p."deletedAt" IS NULL`,
+    const conditions: any[] = [
+      (Prisma as any).sql`p."parentId" IS NULL`,
+      (Prisma as any).sql`p."deletedAt" IS NULL`,
     ];
 
     if (excludedIds.length > 0) {
-      conditions.push(Prisma.sql`p."authorId" NOT IN (${Prisma.join(excludedIds)})`);
+      conditions.push((Prisma as any).sql`p."authorId" NOT IN (${(Prisma as any).join(excludedIds)})`);
     }
 
     if (allowedPrivateIds.length > 0) {
       conditions.push(
-        Prisma.sql`(u."isPrivate" = false OR p."authorId" IN (${Prisma.join(allowedPrivateIds)}))`
+        (Prisma as any).sql`(u."isPrivate" = false OR p."authorId" IN (${(Prisma as any).join(allowedPrivateIds)}))`
       );
     } else {
-      conditions.push(Prisma.sql`u."isPrivate" = false`);
+      conditions.push((Prisma as any).sql`u."isPrivate" = false`);
     }
 
     if (normalizedCategory) {
       conditions.push(
-        Prisma.sql`(g.category ILIKE ${normalizedCategory} OR p.content ILIKE ${'%' + normalizedCategory + '%'})`
+        (Prisma as any).sql`(g.category ILIKE ${normalizedCategory} OR p.content ILIKE ${'%' + normalizedCategory + '%'})`
       );
     }
 
-    const whereClause = Prisma.sql`WHERE ${Prisma.join(conditions, ' AND ')}`;
+    const whereClause = (Prisma as any).sql`WHERE ${(Prisma as any).join(conditions, ' AND ')}`;
 
     // Twitter-style ranking score:
     // 1. Likes: 2.0x

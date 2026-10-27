@@ -8,6 +8,7 @@
   ],
   "scripts": {
     "build:packages": "npm run db:generate && npm run build -w packages/shared && npm run build -w packages/database",
+    "prebuild": "npm run build:packages",
     "predev": "npm run build:packages",
     "predev:api": "npm run build:packages",
     "predev:web": "npm run build -w packages/shared",

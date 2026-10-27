@@ -27,6 +27,7 @@
     "@nestjs/throttler": "^6.4.0",
     "@nestjs/websockets": "^11.0.10",
     "@socket.io/redis-adapter": "^8.3.0",
+    "@prisma/client": "^6.4.1",
     "@varta/database": "*",
     "@varta/shared": "*",
     "argon2": "^0.41.1",
