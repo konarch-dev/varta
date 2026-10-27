@@ -295,17 +295,34 @@ export const PostCard: React.FC<PostCardProps> = ({ post, onPostDeleted }) => {
       <div className="flex-1 min-w-0">
         {/* Community / Group Badge */}
         {post.group && (
-          <div className="flex items-center gap-1.5 mb-1">
-            <Link
-              href={`/communities?id=${post.group.id || post.groupId || post.group.slug}`}
-              onClick={(e) => e.stopPropagation()}
+          <div className="flex items-center gap-1.5 mb-1 relative z-10">
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                e.preventDefault();
+                const target =
+                  post.group?.id ||
+                  post.groupId ||
+                  post.group?.slug ||
+                  post.group?.name;
+                if (target) {
+                  router.push(`/communities?id=${encodeURIComponent(target)}`);
+                } else {
+                  router.push('/communities');
+                }
+              }}
               title={`View ${post.group.name} Community`}
-              className="inline-flex items-center gap-1.5 text-[11px] font-semibold bg-orange-100 hover:bg-orange-200 text-orange-950 border border-orange-300 dark:bg-[#FF9933]/15 dark:hover:bg-[#FF9933]/25 dark:text-[#FF9933] dark:border-[#FF9933]/30 px-2.5 py-0.5 rounded-full transition cursor-pointer group/badge"
+              className="inline-flex items-center gap-1.5 text-[11px] font-semibold bg-orange-100 hover:bg-orange-200 text-orange-950 border border-orange-300 dark:bg-[#FF9933]/15 dark:hover:bg-[#FF9933]/25 dark:text-[#FF9933] dark:border-[#FF9933]/30 px-2.5 py-0.5 rounded-full transition cursor-pointer group/badge active:scale-95 text-left"
             >
-              <span className="w-1.5 h-1.5 rounded-full bg-[#EA580C] dark:bg-[#FF9933] group-hover/badge:scale-125 transition-transform" />
-              <span className="truncate max-w-[220px] text-orange-950 dark:text-[#FF9933] font-bold group-hover/badge:underline">{post.group.name}</span>
-              <span className="text-[10px] text-orange-900 dark:text-slate-400 font-medium">in {post.group.category}</span>
-            </Link>
+              <span className="w-1.5 h-1.5 rounded-full bg-[#EA580C] dark:bg-[#FF9933] group-hover/badge:scale-125 transition-transform shrink-0 pointer-events-none" />
+              <span className="truncate max-w-[220px] text-orange-950 dark:text-[#FF9933] font-bold group-hover/badge:underline pointer-events-none">
+                {post.group.name}
+              </span>
+              <span className="text-[10px] text-orange-900 dark:text-slate-400 font-medium shrink-0 pointer-events-none">
+                in {post.group.category}
+              </span>
+            </button>
           </div>
         )}
 

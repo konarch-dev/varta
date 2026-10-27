@@ -213,6 +213,7 @@ export class PostsService {
       where: { id: postId },
       include: {
         author: { include: { profile: true } },
+        group: true,
         media: { orderBy: { order: 'asc' } },
         poll: {
           include: {
@@ -255,6 +256,7 @@ export class PostsService {
       orderBy: { createdAt: 'asc' },
       include: {
         author: { include: { profile: true } },
+        group: true,
         media: true,
         poll: { include: { options: true } },
       },

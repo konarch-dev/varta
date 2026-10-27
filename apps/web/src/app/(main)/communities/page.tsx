@@ -96,7 +96,7 @@ function CommunitiesContent() {
     },
   });
 
-  // Fetch single community detail by queryId (ID or slug)
+  // Fetch single community detail by queryId (ID, slug, or name)
   const {
     data: fetchedCommunity,
     isLoading: isFetchingCommunity,
@@ -109,31 +109,54 @@ function CommunitiesContent() {
         const res = await apiRequest(
           `/explore/communities/${encodeURIComponent(queryId)}`,
         );
-        return res as CommunityItem;
+        if (res && res.id) return res as CommunityItem;
       } catch (err) {
-        console.error('Failed to load community detail', err);
-        return null;
+        console.warn('Direct community endpoint failed, trying search fallback...', err);
       }
+
+      // Robust fallback for live environments: query /explore/communities?search=...
+      try {
+        const searchRes = await apiRequest(
+          `/explore/communities?search=${encodeURIComponent(queryId)}&limit=20`,
+        );
+        const items = (searchRes?.items || []) as CommunityItem[];
+        const exact = items.find(
+          (c) =>
+            c.id === queryId ||
+            c.slug === queryId ||
+            c.name.toLowerCase() === queryId.toLowerCase(),
+        );
+        if (exact) return exact;
+        if (items.length > 0) return items[0];
+      } catch (searchErr) {
+        console.error('Fallback community search failed', searchErr);
+      }
+
+      return null;
     },
     enabled: !!queryId,
   });
 
   // Resolve the active community being viewed
   const activeCommunity = useMemo(() => {
-    if (
-      selectedCommunity &&
-      (!queryId ||
-        selectedCommunity.id === queryId ||
-        selectedCommunity.slug === queryId)
-    ) {
-      return selectedCommunity;
-    }
     if (queryId) {
+      if (
+        selectedCommunity &&
+        (selectedCommunity.id === queryId ||
+          selectedCommunity.slug === queryId ||
+          selectedCommunity.name.toLowerCase() === queryId.toLowerCase())
+      ) {
+        return selectedCommunity;
+      }
       if (fetchedCommunity) return fetchedCommunity;
       const matched = communitiesData?.find(
-        (c) => c.id === queryId || c.slug === queryId,
+        (c) =>
+          c.id === queryId ||
+          c.slug === queryId ||
+          c.name.toLowerCase() === queryId.toLowerCase(),
       );
       if (matched) return matched;
+      return null;
     }
     return selectedCommunity;
   }, [selectedCommunity, queryId, fetchedCommunity, communitiesData]);
