@@ -118,6 +118,16 @@ export class ExploreController {
     return this.exploreService.toggleJoinCommunity(id, user.id);
   }
 
+  @Get('communities/:id')
+  @UseGuards(OptionalJwtAuthGuard)
+  @ApiOperation({ summary: 'Get community details by ID or slug' })
+  async getCommunity(
+    @Param('id') id: string,
+    @CurrentUser() user?: any,
+  ) {
+    return this.exploreService.getCommunity(id, user?.id);
+  }
+
   @Get('communities/:id/posts')
   @UseGuards(OptionalJwtAuthGuard)
   @ApiOperation({ summary: 'Get community posts with media and videos' })

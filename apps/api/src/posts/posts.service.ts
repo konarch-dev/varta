@@ -64,6 +64,7 @@ export class PostsService {
         data: {
           authorId,
           content,
+          groupId: (dto as any).groupId || null,
           parentId: dto.parentId,
           quotePostId: dto.quotePostId,
           repostOfId: dto.repostOfId,
@@ -125,6 +126,14 @@ export class PostsService {
           where: { id: dto.quotePostId },
           data: { quoteCount: { increment: 1 } },
         });
+      }
+
+      // 3b. Increment group postCount
+      if ((dto as any).groupId) {
+        await (tx as any).group.update({
+          where: { id: (dto as any).groupId },
+          data: { postCount: { increment: 1 } },
+        }).catch(() => {});
       }
 
       // 4. Handle hashtags

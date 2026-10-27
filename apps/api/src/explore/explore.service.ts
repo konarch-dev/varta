@@ -1,4 +1,4 @@
-import { Injectable, BadRequestException } from '@nestjs/common';
+import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../database/prisma.service';
 import { PostsService } from '../posts/posts.service';
 
@@ -396,11 +396,63 @@ export class ExploreService {
     };
   }
 
+  async getCommunity(idOrSlug: string, viewerId?: string) {
+    const group = await (this.prisma as any).group.findFirst({
+      where: {
+        OR: [
+          { id: idOrSlug },
+          { slug: idOrSlug },
+          { name: { equals: idOrSlug, mode: 'insensitive' } },
+        ],
+      },
+      include: {
+        ...(viewerId && {
+          members: {
+            where: { userId: viewerId },
+            select: { id: true },
+          },
+        }),
+      },
+    });
+
+    if (!group) {
+      throw new NotFoundException('Community not found');
+    }
+
+    return {
+      id: group.id,
+      name: group.name,
+      slug: group.slug,
+      description: group.description,
+      category: group.category,
+      avatarUrl: group.avatarUrl,
+      coverUrl: group.coverUrl,
+      memberCount: group.memberCount,
+      postCount: group.postCount,
+      isJoined: viewerId ? (group.members?.length > 0) : false,
+      createdAt: group.createdAt,
+    };
+  }
+
   async toggleJoinCommunity(communityId: string, userId: string) {
+    let targetGroupId = communityId;
+    const group = await (this.prisma as any).group.findFirst({
+      where: {
+        OR: [
+          { id: communityId },
+          { slug: communityId },
+        ],
+      },
+      select: { id: true },
+    });
+    if (group) {
+      targetGroupId = group.id;
+    }
+
     const existing = await (this.prisma as any).groupMember.findUnique({
       where: {
         groupId_userId: {
-          groupId: communityId,
+          groupId: targetGroupId,
           userId,
         },
       },
@@ -411,20 +463,20 @@ export class ExploreService {
         where: { id: existing.id },
       });
       const updated = await (this.prisma as any).group.update({
-        where: { id: communityId },
+        where: { id: targetGroupId },
         data: { memberCount: { decrement: 1 } },
       });
       return { isJoined: false, memberCount: Math.max(0, updated.memberCount) };
     } else {
       await (this.prisma as any).groupMember.create({
         data: {
-          groupId: communityId,
+          groupId: targetGroupId,
           userId,
           role: 'MEMBER',
         },
       });
       const updated = await (this.prisma as any).group.update({
-        where: { id: communityId },
+        where: { id: targetGroupId },
         data: { memberCount: { increment: 1 } },
       });
       return { isJoined: true, memberCount: updated.memberCount };
@@ -432,9 +484,23 @@ export class ExploreService {
   }
 
   async getCommunityPosts(communityId: string, limit = 20, cursor?: string, viewerId?: string) {
+    let targetGroupId = communityId;
+    const group = await (this.prisma as any).group.findFirst({
+      where: {
+        OR: [
+          { id: communityId },
+          { slug: communityId },
+        ],
+      },
+      select: { id: true },
+    });
+    if (group) {
+      targetGroupId = group.id;
+    }
+
     const posts = await this.prisma.post.findMany({
       where: {
-        groupId: communityId,
+        groupId: targetGroupId,
         parentId: null,
         deletedAt: null,
       },

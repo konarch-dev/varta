@@ -1,13 +1,26 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useMemo, Suspense } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Search, Users, Plus, Check, Loader2, ArrowLeft, MessageSquare, Heart, Repeat, Video as VideoIcon, Image as ImageIcon, X, Globe, Lock } from 'lucide-react';
+import {
+  Search,
+  Users,
+  Plus,
+  Check,
+  Loader2,
+  ArrowLeft,
+  MessageSquare,
+  Image as ImageIcon,
+  X,
+  Globe,
+  Lock,
+} from 'lucide-react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { MainLayout } from '../../../components/layout/MainLayout';
 import { apiRequest } from '../../../lib/api';
 import { useAuthStore } from '../../../stores/authStore';
-import { useRouter } from 'next/navigation';
 import { PostCard } from '../../../components/feed/PostCard';
+import { PostComposer } from '../../../components/feed/PostComposer';
 
 interface CommunityItem {
   id: string;
@@ -23,10 +36,13 @@ interface CommunityItem {
   createdAt: string;
 }
 
-export default function CommunitiesPage() {
+function CommunitiesContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const queryClient = useQueryClient();
   const { user } = useAuthStore();
+
+  const queryId = searchParams.get('id') || searchParams.get('slug');
 
   const [activeCategory, setActiveCategory] = useState<string>('All');
   const [searchQuery, setSearchQuery] = useState('');
@@ -54,39 +70,89 @@ export default function CommunitiesPage() {
     'My Communities',
   ];
 
-  // Fetch communities from backend
+  // Fetch communities list from backend
   const { data: communitiesData, isLoading } = useQuery({
     queryKey: ['communities', activeCategory, searchQuery],
     queryFn: async () => {
       const isJoined = activeCategory === 'My Communities';
-      const catParam = !isJoined && activeCategory !== 'All' ? encodeURIComponent(activeCategory) : '';
-      const searchParam = searchQuery.trim() ? encodeURIComponent(searchQuery.trim()) : '';
-      
+      const catParam =
+        !isJoined && activeCategory !== 'All'
+          ? encodeURIComponent(activeCategory)
+          : '';
+      const searchParam = searchQuery.trim()
+        ? encodeURIComponent(searchQuery.trim())
+        : '';
+
       const queryParts = [];
       if (catParam) queryParts.push(`category=${catParam}`);
       if (searchParam) queryParts.push(`search=${searchParam}`);
       if (isJoined) queryParts.push(`joined=true`);
       queryParts.push(`limit=100`);
 
-      const queryString = queryParts.length > 0 ? `?${queryParts.join('&')}` : '';
+      const queryString =
+        queryParts.length > 0 ? `?${queryParts.join('&')}` : '';
       const res = await apiRequest(`/explore/communities${queryString}`);
       return res.items as CommunityItem[];
     },
   });
 
-  // Fetch posts for selected community
+  // Fetch single community detail by queryId (ID or slug)
+  const {
+    data: fetchedCommunity,
+    isLoading: isFetchingCommunity,
+    isError: isFetchError,
+  } = useQuery({
+    queryKey: ['community-detail', queryId],
+    queryFn: async () => {
+      if (!queryId) return null;
+      try {
+        const res = await apiRequest(
+          `/explore/communities/${encodeURIComponent(queryId)}`,
+        );
+        return res as CommunityItem;
+      } catch (err) {
+        console.error('Failed to load community detail', err);
+        return null;
+      }
+    },
+    enabled: !!queryId,
+  });
+
+  // Resolve the active community being viewed
+  const activeCommunity = useMemo(() => {
+    if (
+      selectedCommunity &&
+      (!queryId ||
+        selectedCommunity.id === queryId ||
+        selectedCommunity.slug === queryId)
+    ) {
+      return selectedCommunity;
+    }
+    if (queryId) {
+      if (fetchedCommunity) return fetchedCommunity;
+      const matched = communitiesData?.find(
+        (c) => c.id === queryId || c.slug === queryId,
+      );
+      if (matched) return matched;
+    }
+    return selectedCommunity;
+  }, [selectedCommunity, queryId, fetchedCommunity, communitiesData]);
+
+  // Fetch posts for the active community
   const {
     data: communityPostsData,
     isLoading: isLoadingPosts,
     refetch: refetchCommunityPosts,
   } = useQuery({
-    queryKey: ['communityPosts', selectedCommunity?.id],
+    queryKey: ['communityPosts', activeCommunity?.id],
     queryFn: async () => {
-      if (!selectedCommunity) return [];
-      const res = await apiRequest(`/explore/communities/${selectedCommunity.id}/posts?limit=50`);
+      if (!activeCommunity?.id) return [];
+      const res = await apiRequest(
+        `/explore/communities/${activeCommunity.id}/posts?limit=50`,
+      );
       return res.items || [];
     },
-    enabled: !!selectedCommunity,
+    enabled: !!activeCommunity?.id,
   });
 
   // Toggle Join Mutation
@@ -97,33 +163,61 @@ export default function CommunitiesPage() {
       });
     },
     onMutate: async (communityId) => {
-      // Optimistic update
-      queryClient.setQueryData(['communities', activeCategory, searchQuery], (old: CommunityItem[] | undefined) => {
-        if (!old) return old;
-        return old.map((c) =>
-          c.id === communityId
-            ? {
-                ...c,
-                isJoined: !c.isJoined,
-                memberCount: c.isJoined ? Math.max(0, c.memberCount - 1) : c.memberCount + 1,
-              }
-            : c
+      // Optimistic update in list
+      queryClient.setQueryData(
+        ['communities', activeCategory, searchQuery],
+        (old: CommunityItem[] | undefined) => {
+          if (!old) return old;
+          return old.map((c) =>
+            c.id === communityId
+              ? {
+                  ...c,
+                  isJoined: !c.isJoined,
+                  memberCount: c.isJoined
+                    ? Math.max(0, c.memberCount - 1)
+                    : c.memberCount + 1,
+                }
+              : c,
+          );
+        },
+      );
+
+      // Optimistic update in detail view
+      if (queryId) {
+        queryClient.setQueryData(
+          ['community-detail', queryId],
+          (prev: CommunityItem | null | undefined) => {
+            if (!prev) return prev;
+            return {
+              ...prev,
+              isJoined: !prev.isJoined,
+              memberCount: prev.isJoined
+                ? Math.max(0, prev.memberCount - 1)
+                : prev.memberCount + 1,
+            };
+          },
         );
-      });
+      }
+
       if (selectedCommunity && selectedCommunity.id === communityId) {
         setSelectedCommunity((prev) =>
           prev
             ? {
                 ...prev,
                 isJoined: !prev.isJoined,
-                memberCount: prev.isJoined ? Math.max(0, prev.memberCount - 1) : prev.memberCount + 1,
+                memberCount: prev.isJoined
+                  ? Math.max(0, prev.memberCount - 1)
+                  : prev.memberCount + 1,
               }
-            : null
+            : null,
         );
       }
     },
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: ['communities'] });
+      if (queryId) {
+        queryClient.invalidateQueries({ queryKey: ['community-detail', queryId] });
+      }
     },
   });
 
@@ -169,6 +263,7 @@ export default function CommunitiesPage() {
       queryClient.invalidateQueries({ queryKey: ['communities'] });
       if (res.id) {
         setSelectedCommunity(res);
+        router.push(`/communities?id=${res.id}`);
       }
     } catch (err: any) {
       alert(err.message || 'Failed to create community');
@@ -181,20 +276,57 @@ export default function CommunitiesPage() {
 
   return (
     <MainLayout>
-      {selectedCommunity ? (
+      {queryId && isFetchingCommunity && !activeCommunity ? (
+        // ---------------- LOADING COMMUNITY VIEW ----------------
+        <div className="min-h-[500px] py-28 flex flex-col items-center justify-center gap-3">
+          <Loader2 size={36} className="animate-spin text-[#FF9933]" />
+          <span className="text-sm font-medium text-slate-300">
+            Opening community page...
+          </span>
+        </div>
+      ) : queryId && !isFetchingCommunity && !activeCommunity ? (
+        // ---------------- COMMUNITY NOT FOUND VIEW ----------------
+        <div className="min-h-[500px] py-24 text-center flex flex-col items-center justify-center p-6 gap-3">
+          <div className="w-16 h-16 rounded-3xl bg-slate-100 dark:bg-[#101D2D] border border-slate-200 dark:border-[#1E293B] flex items-center justify-center text-slate-400 mb-2">
+            <Users size={32} />
+          </div>
+          <h2 className="text-lg font-bold text-slate-900 dark:text-white">
+            Community Not Found
+          </h2>
+          <p className="text-xs text-slate-500 dark:text-slate-400 max-w-sm">
+            The group or community page you requested could not be located or may have been deleted.
+          </p>
+          <button
+            onClick={() => {
+              setSelectedCommunity(null);
+              router.push('/communities');
+            }}
+            className="mt-3 px-5 py-2.5 bg-[#FF9933] hover:bg-[#E68525] text-white text-xs font-bold rounded-xl transition shadow-md shadow-[#FF9933]/25"
+          >
+            Browse All Communities
+          </button>
+        </div>
+      ) : activeCommunity ? (
         // ---------------- COMMUNITY DETAIL & POSTS VIEW ----------------
         <div className="min-h-screen pb-20">
           {/* Header banner */}
-          <div className="relative h-44 sm:h-52 w-full bg-[#101D2D] overflow-hidden">
+          <div className="relative h-44 sm:h-56 w-full bg-[#101D2D] overflow-hidden">
             <img
-              src={selectedCommunity.coverUrl || selectedCommunity.avatarUrl}
-              alt={selectedCommunity.name}
+              src={
+                activeCommunity.coverUrl ||
+                activeCommunity.avatarUrl ||
+                'https://images.unsplash.com/photo-1579546929518-9e396f3cc809?w=1200&auto=format&fit=crop&q=80'
+              }
+              alt={activeCommunity.name}
               className="w-full h-full object-cover"
             />
             <div className="absolute inset-0 bg-gradient-to-t from-[#050B14] via-[#050B14]/40 to-transparent" />
             <button
-              onClick={() => setSelectedCommunity(null)}
-              className="absolute top-4 left-4 p-2 rounded-full bg-black/60 hover:bg-black/90 text-white backdrop-blur-md transition flex items-center gap-1.5 text-xs font-semibold"
+              onClick={() => {
+                setSelectedCommunity(null);
+                router.push('/communities');
+              }}
+              className="absolute top-4 left-4 p-2.5 rounded-full bg-black/60 hover:bg-black/90 text-white backdrop-blur-md transition flex items-center gap-1.5 text-xs font-semibold shadow-lg"
             >
               <ArrowLeft size={16} />
               <span>Back to Communities</span>
@@ -202,25 +334,31 @@ export default function CommunitiesPage() {
           </div>
 
           {/* Community Info bar */}
-          <div className="px-4 pb-4 -mt-10 relative z-10 flex flex-col gap-3 border-b border-[#1E293B]">
+          <div className="px-4 pb-4 -mt-10 relative z-10 flex flex-col gap-3 border-b border-slate-200 dark:border-[#1E293B]">
             <div className="flex items-end justify-between gap-4">
-              <div className="h-20 w-20 rounded-2xl overflow-hidden bg-[#101D2D] border-2 border-[#050B14] shadow-xl shrink-0">
-                <img
-                  src={selectedCommunity.avatarUrl}
-                  alt={selectedCommunity.name}
-                  className="h-full w-full object-cover"
-                />
+              <div className="h-20 w-20 sm:h-24 sm:w-24 rounded-2xl overflow-hidden bg-[#101D2D] border-3 border-white dark:border-[#050B14] shadow-2xl shrink-0 flex items-center justify-center">
+                {activeCommunity.avatarUrl ? (
+                  <img
+                    src={activeCommunity.avatarUrl}
+                    alt={activeCommunity.name}
+                    className="h-full w-full object-cover"
+                  />
+                ) : (
+                  <span className="text-2xl font-black text-[#FF9933]">
+                    {activeCommunity.name.charAt(0).toUpperCase()}
+                  </span>
+                )}
               </div>
 
               <button
-                onClick={(e) => handleToggleJoin(e, selectedCommunity)}
+                onClick={(e) => handleToggleJoin(e, activeCommunity)}
                 className={`py-2 px-6 rounded-full text-xs font-bold transition shadow-md active:scale-95 ${
-                  selectedCommunity.isJoined
-                    ? 'bg-transparent border border-[#1E293B] text-slate-200 hover:border-red-500 hover:text-red-400'
+                  activeCommunity.isJoined
+                    ? 'bg-transparent border border-slate-300 dark:border-[#1E293B] text-slate-700 dark:text-slate-200 hover:border-red-500 hover:text-red-400'
                     : 'bg-[#FF9933] hover:bg-[#E68525] text-white shadow-[#FF9933]/20'
                 }`}
               >
-                {selectedCommunity.isJoined ? (
+                {activeCommunity.isJoined ? (
                   <span className="flex items-center gap-1.5">
                     <Check size={14} className="text-[#00C853]" /> Joined
                   </span>
@@ -231,34 +369,56 @@ export default function CommunitiesPage() {
             </div>
 
             <div>
-              <div className="flex items-center gap-2">
-                <h1 className="text-xl font-extrabold text-white">{selectedCommunity.name}</h1>
+              <div className="flex items-center gap-2 flex-wrap">
+                <h1 className="text-xl sm:text-2xl font-extrabold text-slate-900 dark:text-white">
+                  {activeCommunity.name}
+                </h1>
                 <span className="community-category-badge px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-[#FF9933]/15 text-[#FF9933] border border-[#FF9933]/30">
-                  {selectedCommunity.category}
+                  {activeCommunity.category}
                 </span>
               </div>
-              <p className="text-xs text-slate-400 mt-0.5">
-                {selectedCommunity.memberCount.toLocaleString()} members • {selectedCommunity.postCount || 50} active posts with videos & media
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                {(activeCommunity.memberCount || 0).toLocaleString()} members •{' '}
+                {communityPostsData?.length || activeCommunity.postCount || 0} posts
               </p>
-              <p className="text-sm text-slate-300 mt-2 leading-relaxed">
-                {selectedCommunity.description}
-              </p>
+              {activeCommunity.description && (
+                <p className="text-sm text-slate-700 dark:text-slate-300 mt-2 leading-relaxed">
+                  {activeCommunity.description}
+                </p>
+              )}
             </div>
           </div>
 
+          {/* Post Composer into this Community */}
+          {user && (
+            <div className="border-b border-slate-200 dark:border-[#1E293B] p-4 bg-slate-50/50 dark:bg-[#0B1422]/60">
+              <h3 className="text-xs font-bold text-slate-600 dark:text-slate-400 mb-2 flex items-center gap-2">
+                <MessageSquare size={14} className="text-[#FF9933]" />
+                Share a post with {activeCommunity.name}
+              </h3>
+              <PostComposer
+                groupId={activeCommunity.id}
+                placeholder={`What's on your mind about ${activeCommunity.name}?`}
+                onSuccess={() => refetchCommunityPosts()}
+              />
+            </div>
+          )}
+
           {/* Community Posts Feed */}
           <div className="p-4">
-            <h2 className="text-sm font-bold text-slate-400 uppercase tracking-wider mb-3">
+            <h2 className="text-sm font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-3">
               Community Posts ({communityPostsData?.length || 0})
             </h2>
 
             {isLoadingPosts ? (
               <div className="py-20 flex flex-col items-center justify-center gap-3">
                 <Loader2 size={30} className="animate-spin text-[#FF9933]" />
-                <span className="text-xs text-slate-400">Loading community discussions & media...</span>
+                <span className="text-xs text-slate-400">
+                  Loading community posts & media...
+                </span>
               </div>
             ) : communityPostsData && communityPostsData.length > 0 ? (
-              <div className="flex flex-col divide-y divide-[#1E293B]">
+              <div className="flex flex-col divide-y divide-slate-100 dark:divide-[#1E293B]">
                 {communityPostsData.map((post: any) => (
                   <PostCard
                     key={post.id}
@@ -268,8 +428,8 @@ export default function CommunitiesPage() {
                 ))}
               </div>
             ) : (
-              <div className="p-8 text-center text-slate-400 text-sm">
-                No posts in this community yet.
+              <div className="p-12 text-center text-slate-500 dark:text-slate-400 text-sm bg-slate-50 dark:bg-[#0B1422]/40 rounded-2xl border border-slate-200 dark:border-[#1E293B]">
+                No posts in this community yet. Be the first to share an update!
               </div>
             )}
           </div>
@@ -278,11 +438,13 @@ export default function CommunitiesPage() {
         // ---------------- COMMUNITIES BROWSER LIST ----------------
         <>
           {/* Header & Search */}
-          <div className="sticky top-0 z-30 bg-[#050B14]/90 backdrop-blur-md border-b border-[#1E293B] p-4 flex flex-col gap-3">
+          <div className="sticky top-0 z-30 bg-white/90 dark:bg-[#050B14]/90 backdrop-blur-md border-b border-slate-200 dark:border-[#1E293B] p-4 flex flex-col gap-3">
             <div className="flex items-center justify-between gap-3">
               <div>
-                <h1 className="text-xl font-extrabold text-white">Communities</h1>
-                <p className="text-xs text-slate-400">
+                <h1 className="text-xl font-extrabold text-slate-900 dark:text-white">
+                  Communities
+                </h1>
+                <p className="text-xs text-slate-500 dark:text-slate-400">
                   Explore active communities with posts, discussions & media
                 </p>
               </div>
@@ -309,10 +471,10 @@ export default function CommunitiesPage() {
               />
               <input
                 type="text"
-                placeholder="Search across 500 communities..."
+                placeholder="Search across communities..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full bg-[#0B1422] border border-[#1E293B] focus:border-[#FF9933] rounded-2xl py-2 pl-10 pr-4 text-sm text-white placeholder-slate-400 outline-none transition"
+                className="w-full bg-slate-100 dark:bg-[#0B1422] border border-slate-200 dark:border-[#1E293B] focus:border-[#FF9933] rounded-2xl py-2 pl-10 pr-4 text-sm text-slate-900 dark:text-white placeholder-slate-400 outline-none transition"
               />
             </div>
 
@@ -325,7 +487,7 @@ export default function CommunitiesPage() {
                   className={`px-3.5 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition ${
                     activeCategory === cat
                       ? 'bg-[#FF9933] text-white shadow-sm'
-                      : 'bg-[#0B1422] text-slate-400 hover:text-white border border-[#1E293B]'
+                      : 'bg-slate-100 dark:bg-[#0B1422] text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white border border-slate-200 dark:border-[#1E293B]'
                   }`}
                 >
                   {cat}
@@ -344,39 +506,52 @@ export default function CommunitiesPage() {
             ) : communities.length === 0 ? (
               <div className="py-20 text-center flex flex-col items-center justify-center">
                 <Users size={40} className="text-slate-600 mb-2" />
-                <span className="text-base font-bold text-white">No communities found</span>
-                <span className="text-xs text-slate-400 mt-1">Try another search term or category</span>
+                <span className="text-base font-bold text-slate-900 dark:text-white">
+                  No communities found
+                </span>
+                <span className="text-xs text-slate-400 mt-1">
+                  Try another search term or category
+                </span>
               </div>
             ) : (
               communities.map((c) => {
                 return (
                   <div
                     key={c.id}
-                    onClick={() => setSelectedCommunity(c)}
-                    className="p-4 bg-[#0B1422] border border-[#1E293B] rounded-3xl hover:border-[#FF9933]/50 transition flex items-center justify-between gap-4 group cursor-pointer shadow-sm hover:shadow-md"
+                    onClick={() => {
+                      setSelectedCommunity(c);
+                      router.push(`/communities?id=${c.id}`);
+                    }}
+                    className="p-4 bg-slate-50 dark:bg-[#0B1422] border border-slate-200 dark:border-[#1E293B] rounded-3xl hover:border-[#FF9933]/50 transition flex items-center justify-between gap-4 group cursor-pointer shadow-sm hover:shadow-md"
                   >
                     <div className="flex items-center gap-3.5 min-w-0">
-                      <div className="h-14 w-14 rounded-2xl overflow-hidden bg-[#101D2D] border border-[#1E293B] shrink-0">
-                        <img
-                          src={c.avatarUrl}
-                          alt={c.name}
-                          className="h-full w-full object-cover group-hover:scale-105 transition-transform duration-300"
-                          loading="lazy"
-                        />
+                      <div className="h-14 w-14 rounded-2xl overflow-hidden bg-slate-200 dark:bg-[#101D2D] border border-slate-200 dark:border-[#1E293B] shrink-0 flex items-center justify-center">
+                        {c.avatarUrl ? (
+                          <img
+                            src={c.avatarUrl}
+                            alt={c.name}
+                            className="h-full w-full object-cover group-hover:scale-105 transition-transform duration-300"
+                            loading="lazy"
+                          />
+                        ) : (
+                          <span className="text-lg font-bold text-[#FF9933]">
+                            {c.name.charAt(0).toUpperCase()}
+                          </span>
+                        )}
                       </div>
                       <div className="flex flex-col min-w-0">
                         <div className="flex items-center gap-2">
-                          <span className="font-bold text-base text-white group-hover:text-[#FF9933] transition truncate">
+                          <span className="font-bold text-base text-slate-900 dark:text-white group-hover:text-[#FF9933] transition truncate">
                             {c.name}
                           </span>
                           <span className="community-category-badge px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-[#FF9933]/15 text-[#FF9933] border border-[#FF9933]/30 shrink-0">
                             {c.category}
                           </span>
                         </div>
-                        <span className="text-xs text-slate-400 truncate mt-0.5">
-                          {c.memberCount.toLocaleString()} members • {c.postCount || 50} posts
+                        <span className="text-xs text-slate-500 dark:text-slate-400 truncate mt-0.5">
+                          {c.memberCount.toLocaleString()} members • {c.postCount || 0} posts
                         </span>
-                        <p className="text-xs text-slate-300 mt-1 line-clamp-1">
+                        <p className="text-xs text-slate-600 dark:text-slate-300 mt-1 line-clamp-1">
                           {c.description}
                         </p>
                       </div>
@@ -386,8 +561,8 @@ export default function CommunitiesPage() {
                       onClick={(e) => handleToggleJoin(e, c)}
                       className={`py-2 px-5 rounded-full text-xs font-bold transition shrink-0 shadow-sm active:scale-95 ${
                         c.isJoined
-                          ? 'bg-transparent border border-[#1E293B] text-slate-300 hover:border-red-500 hover:text-red-400'
-                          : 'bg-white hover:bg-slate-200 text-black'
+                          ? 'bg-transparent border border-slate-300 dark:border-[#1E293B] text-slate-700 dark:text-slate-300 hover:border-red-500 hover:text-red-400'
+                          : 'bg-slate-900 hover:bg-slate-800 text-white dark:bg-white dark:hover:bg-slate-200 dark:text-black'
                       }`}
                     >
                       {c.isJoined ? (
@@ -418,7 +593,9 @@ export default function CommunitiesPage() {
                 </div>
                 <div>
                   <h3 className="text-sm font-bold text-white">Create New Community</h3>
-                  <p className="text-[11px] text-slate-400">Build a community for discussions, news & media</p>
+                  <p className="text-[11px] text-slate-400">
+                    Build a community for discussions, news & media
+                  </p>
                 </div>
               </div>
               <button
@@ -457,11 +634,13 @@ export default function CommunitiesPage() {
                   onChange={(e) => setNewCommCategory(e.target.value)}
                   className="w-full bg-[#101D2D] border border-[#1E293B] rounded-xl px-3 py-2.5 text-xs text-white focus:outline-none focus:border-[#FF9933]"
                 >
-                  {categories.filter((c) => c !== 'All' && c !== 'My Communities').map((cat) => (
-                    <option key={cat} value={cat}>
-                      🏷️ {cat}
-                    </option>
-                  ))}
+                  {categories
+                    .filter((c) => c !== 'All' && c !== 'My Communities')
+                    .map((cat) => (
+                      <option key={cat} value={cat}>
+                        🏷️ {cat}
+                      </option>
+                    ))}
                   <option value="General">🏷️ General</option>
                 </select>
               </div>
@@ -470,7 +649,9 @@ export default function CommunitiesPage() {
               <div>
                 <label className="block text-xs font-semibold text-slate-300 mb-1.5 flex justify-between">
                   <span>Description</span>
-                  <span className="text-[10px] text-slate-500">{newCommDesc.length}/500</span>
+                  <span className="text-[10px] text-slate-500">
+                    {newCommDesc.length}/500
+                  </span>
                 </label>
                 <textarea
                   rows={3}
@@ -527,10 +708,15 @@ export default function CommunitiesPage() {
                     }`}
                   >
                     <span className="text-xs font-bold flex items-center gap-1.5">
-                      <Globe size={13} className={!newCommIsPrivate ? 'text-[#FF9933]' : ''} />
+                      <Globe
+                        size={13}
+                        className={!newCommIsPrivate ? 'text-[#FF9933]' : ''}
+                      />
                       Public
                     </span>
-                    <span className="text-[10px] text-slate-400">Anyone can view & join</span>
+                    <span className="text-[10px] text-slate-400">
+                      Anyone can view & join
+                    </span>
                   </button>
 
                   <button
@@ -543,10 +729,15 @@ export default function CommunitiesPage() {
                     }`}
                   >
                     <span className="text-xs font-bold flex items-center gap-1.5">
-                      <Lock size={13} className={newCommIsPrivate ? 'text-[#FF9933]' : ''} />
+                      <Lock
+                        size={13}
+                        className={newCommIsPrivate ? 'text-[#FF9933]' : ''}
+                      />
                       Private
                     </span>
-                    <span className="text-[10px] text-slate-400">Restricted membership</span>
+                    <span className="text-[10px] text-slate-400">
+                      Restricted membership
+                    </span>
                   </button>
                 </div>
               </div>
@@ -583,5 +774,21 @@ export default function CommunitiesPage() {
         </div>
       )}
     </MainLayout>
+  );
+}
+
+export default function CommunitiesPage() {
+  return (
+    <Suspense
+      fallback={
+        <MainLayout>
+          <div className="py-24 flex items-center justify-center text-xs text-slate-400">
+            <Loader2 size={28} className="animate-spin text-[#FF9933]" />
+          </div>
+        </MainLayout>
+      }
+    >
+      <CommunitiesContent />
+    </Suspense>
   );
 }

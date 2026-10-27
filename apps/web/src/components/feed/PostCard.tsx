@@ -297,12 +297,13 @@ export const PostCard: React.FC<PostCardProps> = ({ post, onPostDeleted }) => {
         {post.group && (
           <div className="flex items-center gap-1.5 mb-1">
             <Link
-              href="/communities"
+              href={`/communities?id=${post.group.id || post.groupId || post.group.slug}`}
               onClick={(e) => e.stopPropagation()}
-              className="inline-flex items-center gap-1.5 text-[11px] font-semibold bg-orange-100 hover:bg-orange-200 text-orange-950 border border-orange-300 dark:bg-[#FF9933]/15 dark:hover:bg-[#FF9933]/25 dark:text-[#FF9933] dark:border-[#FF9933]/30 px-2.5 py-0.5 rounded-full transition"
+              title={`View ${post.group.name} Community`}
+              className="inline-flex items-center gap-1.5 text-[11px] font-semibold bg-orange-100 hover:bg-orange-200 text-orange-950 border border-orange-300 dark:bg-[#FF9933]/15 dark:hover:bg-[#FF9933]/25 dark:text-[#FF9933] dark:border-[#FF9933]/30 px-2.5 py-0.5 rounded-full transition cursor-pointer group/badge"
             >
-              <span className="w-1.5 h-1.5 rounded-full bg-[#EA580C] dark:bg-[#FF9933]" />
-              <span className="truncate max-w-[220px] text-orange-950 dark:text-[#FF9933] font-bold">{post.group.name}</span>
+              <span className="w-1.5 h-1.5 rounded-full bg-[#EA580C] dark:bg-[#FF9933] group-hover/badge:scale-125 transition-transform" />
+              <span className="truncate max-w-[220px] text-orange-950 dark:text-[#FF9933] font-bold group-hover/badge:underline">{post.group.name}</span>
               <span className="text-[10px] text-orange-900 dark:text-slate-400 font-medium">in {post.group.category}</span>
             </Link>
           </div>

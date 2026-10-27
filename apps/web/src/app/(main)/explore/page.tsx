@@ -384,7 +384,10 @@ export default function ExplorePage() {
                   key={comm.id}
                   className="p-3.5 bg-[#0B1422] border border-[#1E293B] rounded-2xl flex items-center justify-between gap-3"
                 >
-                  <div className="flex items-center gap-3 overflow-hidden min-w-0">
+                  <Link
+                    href={`/communities?id=${comm.id}`}
+                    className="flex items-center gap-3 overflow-hidden min-w-0 flex-1 hover:opacity-85 transition cursor-pointer"
+                  >
                     <div className="h-11 w-11 rounded-2xl bg-[#101D2D] border border-[#1E293B] flex items-center justify-center font-bold text-[#FF9933] overflow-hidden shrink-0">
                       {comm.avatarUrl ? (
                         <img
@@ -397,7 +400,7 @@ export default function ExplorePage() {
                       )}
                     </div>
                     <div className="flex flex-col overflow-hidden min-w-0">
-                      <span className="font-bold text-sm text-slate-100 truncate">
+                      <span className="font-bold text-sm text-slate-100 truncate hover:underline">
                         {comm.name}
                       </span>
                       <span className="text-xs text-slate-400 truncate">
@@ -407,7 +410,7 @@ export default function ExplorePage() {
                         {comm.memberCount} members · {comm.category}
                       </span>
                     </div>
-                  </div>
+                  </Link>
 
                   <button
                     onClick={(e) =>

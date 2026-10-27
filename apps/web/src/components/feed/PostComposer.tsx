@@ -32,6 +32,7 @@ import {
 
 interface PostComposerProps {
   parentId?: string;
+  groupId?: string;
   placeholder?: string;
   onSuccess?: () => void;
   className?: string;
@@ -48,6 +49,7 @@ interface AttachedMediaItem {
 
 export const PostComposer: React.FC<PostComposerProps> = ({
   parentId,
+  groupId,
   placeholder,
   onSuccess,
   className = '',
@@ -275,6 +277,7 @@ export const PostComposer: React.FC<PostComposerProps> = ({
       const payload: any = {
         content: content.trim(),
         parentId: parentId || null,
+        groupId: groupId || null,
         ...(finalMediaUrls.length > 0 && { mediaUrls: finalMediaUrls }),
         replySettings:
           interactionSettings.replyMode === 'custom'

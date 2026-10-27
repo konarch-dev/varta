@@ -119,6 +119,7 @@ export type CreatePollDto = z.infer<typeof CreatePollSchema>;
 export const CreatePostSchema = z.object({
   content: z.string().max(POST_MAX_LENGTH, `Post cannot exceed ${POST_MAX_LENGTH} characters`),
   parentId: z.string().uuid().optional().nullable(),
+  groupId: z.string().optional().nullable(),
   repostOfId: z.string().uuid().optional().nullable(),
   quotePostId: z.string().uuid().optional().nullable(),
   mediaUrls: z
